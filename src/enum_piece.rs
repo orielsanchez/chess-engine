@@ -11,6 +11,12 @@ pub enum EnumPiece {
 }
 
 #[derive(Clone, Copy)]
+pub enum Color {
+    White,
+    Black,
+}
+
+#[derive(Clone, Copy)]
 pub enum BoardSquares {
     A8,
     B8,
