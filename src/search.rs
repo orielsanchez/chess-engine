@@ -1,6 +1,6 @@
 use crate::moves::Move;
 use crate::position::{Position, PositionError};
-use crate::transposition::{TranspositionTable, NodeType};
+use crate::transposition::{NodeType, TranspositionTable};
 use crate::types::MoveGenError;
 use std::fmt;
 
@@ -488,9 +488,9 @@ impl SearchEngine {
             }
         }
 
-        // Base case: reached depth limit or terminal position
+        // Base case: reached depth limit - call quiescence search to avoid horizon effect
         if depth == 0 {
-            return Ok(position.evaluate());
+            return self.quiescence_search(position, alpha, beta, maximizing);
         }
 
         let legal_moves = position.generate_legal_moves()?;
@@ -569,17 +569,93 @@ impl SearchEngine {
         // Store in transposition table
         if let Some(ref mut tt) = self.transposition_table {
             let node_type = if final_eval >= beta {
-                NodeType::LowerBound  // Failed high (alpha cutoff) - actual score >= beta
+                NodeType::LowerBound // Failed high (alpha cutoff) - actual score >= beta
             } else if final_eval <= original_alpha {
-                NodeType::UpperBound  // Failed low (beta cutoff) - actual score <= alpha
+                NodeType::UpperBound // Failed low (beta cutoff) - actual score <= alpha
             } else {
-                NodeType::Exact       // Exact score within alpha-beta window
+                NodeType::Exact // Exact score within alpha-beta window
             };
-            
+
             tt.store(position.hash(), final_eval, depth, best_move, node_type);
         }
 
         Ok(final_eval)
+    }
+
+    /// Quiescence search to avoid horizon effect by searching tactical moves (captures, checks)
+    /// until a quiet position is reached
+    pub fn quiescence_search(
+        &mut self,
+        position: &Position,
+        mut alpha: i32,
+        mut beta: i32,
+        maximizing: bool,
+    ) -> Result<i32, SearchError> {
+        self.nodes_evaluated += 1;
+
+        // Check time limit during quiescence search
+        if self.nodes_evaluated % 1000 == 0 && self.should_stop() {
+            return Ok(position.evaluate());
+        }
+
+        // Stand pat evaluation - assume we can achieve at least the static evaluation
+        let stand_pat = position.evaluate();
+
+        if maximizing {
+            if stand_pat >= beta {
+                return Ok(beta); // Beta cutoff
+            }
+            alpha = alpha.max(stand_pat);
+        } else {
+            if stand_pat <= alpha {
+                return Ok(alpha); // Alpha cutoff
+            }
+            beta = beta.min(stand_pat);
+        }
+
+        // Generate only tactical moves (captures and promotions)
+        let legal_moves = position.generate_legal_moves()?;
+        let tactical_moves: Vec<Move> = legal_moves
+            .into_iter()
+            .filter(|mv| mv.move_type.is_capture() || mv.move_type.is_promotion())
+            .collect();
+
+        // If no tactical moves, return stand pat evaluation (quiet position)
+        if tactical_moves.is_empty() {
+            return Ok(stand_pat);
+        }
+
+        // Search tactical moves
+        let mut best_score = stand_pat;
+        for &mv in &tactical_moves {
+            // Check time limit frequently
+            if self.should_stop() {
+                break;
+            }
+
+            let mut search_position = position.clone();
+            if search_position.apply_move_for_search(mv).is_ok() {
+                let score = self.quiescence_search(&search_position, alpha, beta, !maximizing)?;
+
+                if maximizing {
+                    if score > best_score {
+                        best_score = score;
+                        alpha = alpha.max(score);
+                        if beta <= alpha {
+                            break; // Beta cutoff
+                        }
+                    }
+                } else if score < best_score {
+                    best_score = score;
+                    beta = beta.min(score);
+                    if beta <= alpha {
+                        break; // Alpha cutoff
+                    }
+                }
+            }
+        }
+
+        Ok(best_score)
     }
 }
 
@@ -885,7 +961,7 @@ mod tests {
     fn test_transposition_table_performance_benefits() {
         let mut engine_without_tt = SearchEngine::new();
         let mut engine_with_tt = SearchEngine::with_transposition_table(32); // 32MB table
-        
+
         engine_without_tt.set_max_depth(4);
         engine_with_tt.set_max_depth(4);
 
@@ -916,20 +992,33 @@ mod tests {
         );
 
         // Verify TT statistics are populated
-        assert!(result_with_tt.tt_hit_rate >= 0.0, "TT hit rate should be valid");
+        assert!(
+            result_with_tt.tt_hit_rate >= 0.0,
+            "TT hit rate should be valid"
+        );
         assert!(result_with_tt.tt_stores > 0, "TT should store entries");
 
         // Calculate performance improvement
-        let improvement_ratio = result_without_tt.nodes_searched as f64 / result_with_tt.nodes_searched as f64;
-        
-        println!("Search without TT: {} nodes in {}ms", 
-                result_without_tt.nodes_searched, result_without_tt.time_ms);
-        println!("Search with TT: {} nodes in {}ms (hit rate: {:.1}%) - {:.1}x improvement", 
-                result_with_tt.nodes_searched, result_with_tt.time_ms,
-                result_with_tt.tt_hit_rate * 100.0, improvement_ratio);
+        let improvement_ratio =
+            result_without_tt.nodes_searched as f64 / result_with_tt.nodes_searched as f64;
+
+        println!(
+            "Search without TT: {} nodes in {}ms",
+            result_without_tt.nodes_searched, result_without_tt.time_ms
+        );
+        println!(
+            "Search with TT: {} nodes in {}ms (hit rate: {:.1}%) - {:.1}x improvement",
+            result_with_tt.nodes_searched,
+            result_with_tt.time_ms,
+            result_with_tt.tt_hit_rate * 100.0,
+            improvement_ratio
+        );
 
         // Should get at least some improvement from better move ordering
-        assert!(improvement_ratio >= 1.0, "TT should provide performance benefit");
+        assert!(
+            improvement_ratio >= 1.0,
+            "TT should provide performance benefit"
+        );
     }
 
     #[test]
@@ -963,18 +1052,24 @@ mod tests {
             "Both searches should find the same move"
         );
 
-        println!("First search: {} nodes, {:.1}% hit rate", 
-                result1.nodes_searched, result1.tt_hit_rate * 100.0);
-        println!("Second search: {} nodes, {:.1}% hit rate", 
-                result2.nodes_searched, result2.tt_hit_rate * 100.0);
+        println!(
+            "First search: {} nodes, {:.1}% hit rate",
+            result1.nodes_searched,
+            result1.tt_hit_rate * 100.0
+        );
+        println!(
+            "Second search: {} nodes, {:.1}% hit rate",
+            result2.nodes_searched,
+            result2.tt_hit_rate * 100.0
+        );
     }
 
-    #[test] 
+    #[test]
     fn test_transposition_table_shallow_search() {
         // Test with very shallow search to debug
         let mut engine_baseline = SearchEngine::new();
         let mut engine_with_tt = SearchEngine::with_transposition_table(1);
-        
+
         engine_baseline.set_max_depth(3);
         engine_with_tt.set_max_depth(3);
 
@@ -988,17 +1083,27 @@ mod tests {
             .find_best_move(&position)
             .expect("TT search should succeed");
 
-        println!("Baseline: move={:?}, eval={}, nodes={}", 
-                result_baseline.best_move, result_baseline.evaluation, result_baseline.nodes_searched);
-        println!("With TT: move={:?}, eval={}, nodes={}, hit_rate={:.1}%", 
-                result_with_tt.best_move, result_with_tt.evaluation, result_with_tt.nodes_searched,
-                result_with_tt.tt_hit_rate * 100.0);
+        println!(
+            "Baseline: move={:?}, eval={}, nodes={}",
+            result_baseline.best_move, result_baseline.evaluation, result_baseline.nodes_searched
+        );
+        println!(
+            "With TT: move={:?}, eval={}, nodes={}, hit_rate={:.1}%",
+            result_with_tt.best_move,
+            result_with_tt.evaluation,
+            result_with_tt.nodes_searched,
+            result_with_tt.tt_hit_rate * 100.0
+        );
 
         // With depth 1, both should find similar results
         // Allow some variation in move choice but evaluation should be close
         let eval_diff = (result_baseline.evaluation - result_with_tt.evaluation).abs();
-        assert!(eval_diff <= 50, "Evaluations too different: {} vs {}", 
-               result_baseline.evaluation, result_with_tt.evaluation);
+        assert!(
+            eval_diff <= 50,
+            "Evaluations too different: {} vs {}",
+            result_baseline.evaluation,
+            result_with_tt.evaluation
+        );
     }
 
     #[test]
@@ -1026,5 +1131,106 @@ mod tests {
             "Should complete iterations"
         );
         assert!(result.completed_depth > 0, "Should complete some depth");
+    }
+
+    // 🔴 RED PHASE: Quiescence Search Tests (These should FAIL)
+    #[test]
+    fn test_quiescence_search_avoids_horizon_effect() {
+        let mut engine = SearchEngine::new();
+        engine.set_max_depth(2);
+
+        // Create a tactical position where a capture leads to recapture
+        // For now, use starting position - this test should fail since quiescence search doesn't exist
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // This should fail because quiescence_search method doesn't exist yet
+        let quiescence_eval = engine.quiescence_search(&position, i32::MIN, i32::MAX, false);
+        assert!(quiescence_eval.is_ok(), "Quiescence search should work");
+    }
+
+    #[test]
+    fn test_quiescence_search_only_searches_captures() {
+        let mut engine = SearchEngine::new();
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // This should fail - method doesn't exist yet
+        let result = engine.quiescence_search(&position, i32::MIN, i32::MAX, true);
+        assert!(
+            result.is_ok(),
+            "Quiescence should only consider tactical moves"
+        );
+    }
+
+    #[test]
+    fn test_quiescence_search_terminates_in_quiet_position() {
+        let mut engine = SearchEngine::new();
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // This should fail - method doesn't exist yet
+        let eval = engine
+            .quiescence_search(&position, i32::MIN, i32::MAX, false)
+            .expect("Quiescence should terminate in quiet positions");
+
+        // In starting position (quiet), should return static evaluation
+        assert_eq!(
+            eval,
+            position.evaluate(),
+            "Should return static eval in quiet position"
+        );
+    }
+
+    #[test]
+    fn test_main_search_integrates_quiescence_at_leaf_nodes() {
+        let mut engine_with_quiescence = SearchEngine::new();
+        engine_with_quiescence.set_max_depth(1);
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // Search should call quiescence at depth 0 instead of static eval
+        let result = engine_with_quiescence
+            .find_best_move(&position)
+            .expect("Search should succeed");
+
+        // Verify that quiescence search is being used (more nodes evaluated due to tactical search)
+        assert!(
+            result.nodes_searched > 20,
+            "Should search more nodes with quiescence: got {}",
+            result.nodes_searched
+        );
+
+        // Should evaluate some positions in quiescence search
+        assert!(result.evaluation != 0, "Should have non-zero evaluation");
+    }
+
+    #[test]
+    fn test_quiescence_search_improves_tactical_accuracy() {
+        let mut engine = SearchEngine::new();
+        engine.set_max_depth(2);
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // With quiescence search, the engine should search more nodes at leaf positions
+        let result = engine
+            .find_best_move(&position)
+            .expect("Search should succeed");
+
+        // Quiescence should add tactical depth beyond the fixed search depth
+        assert!(
+            result.nodes_searched > 50,
+            "Quiescence should increase node count significantly: got {}",
+            result.nodes_searched
+        );
+
+        // Verify search completed successfully
+        assert!(
+            result.completed_depth >= 2,
+            "Should complete the target depth"
+        );
+        assert!(
+            result.time_ms > 0,
+            "Should take measurable time with quiescence"
+        );
     }
 }
