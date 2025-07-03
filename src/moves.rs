@@ -143,7 +143,10 @@ impl Move {
         let to = Square::from_algebraic(to_str)?;
 
         let move_type = if notation.len() == 5 {
-            let promotion_char = notation.chars().nth(4).unwrap();
+            let promotion_char = notation
+                .chars()
+                .nth(4)
+                .ok_or("Invalid promotion notation")?;
             let piece_type = match promotion_char {
                 'q' => PieceType::Queen,
                 'r' => PieceType::Rook,

@@ -1,5 +1,27 @@
-use crate::board::Board;
+use crate::board::{Board, BoardError};
 use crate::types::*;
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PositionError {
+    BoardError(BoardError),
+}
+
+impl fmt::Display for PositionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PositionError::BoardError(e) => write!(f, "Position error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for PositionError {}
+
+impl From<BoardError> for PositionError {
+    fn from(error: BoardError) -> Self {
+        PositionError::BoardError(error)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Position {
@@ -23,15 +45,15 @@ impl Position {
         }
     }
 
-    pub fn starting_position() -> Self {
-        Self {
-            board: Board::starting_position(),
+    pub fn starting_position() -> Result<Self, PositionError> {
+        Ok(Self {
+            board: Board::starting_position()?,
             side_to_move: Color::White,
             castling_rights: CastlingRights::new(),
             en_passant: None,
             halfmove_clock: 0,
             fullmove_number: 1,
-        }
+        })
     }
 
     pub fn piece_at(&self, square: Square) -> Option<Piece> {

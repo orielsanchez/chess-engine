@@ -226,3 +226,20 @@ impl Default for CastlingRights {
         Self::new()
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MoveGenError {
+    InvalidSquare(&'static str),
+    InvalidMove(String),
+}
+
+impl fmt::Display for MoveGenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MoveGenError::InvalidSquare(msg) => write!(f, "Invalid square: {}", msg),
+            MoveGenError::InvalidMove(msg) => write!(f, "Invalid move: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for MoveGenError {}
