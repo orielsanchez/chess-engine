@@ -139,6 +139,24 @@ pub struct UndoMove {
 }
 
 /// Main search engine implementation
+/// Killer moves storage for move ordering optimization
+#[derive(Debug, Clone)]
+struct KillerMoves {
+    /// Primary killer move at each depth
+    primary: [Option<Move>; 64],
+    /// Secondary killer move at each depth
+    secondary: [Option<Move>; 64],
+}
+
+impl KillerMoves {
+    fn new() -> Self {
+        Self {
+            primary: [None; 64],
+            secondary: [None; 64],
+        }
+    }
+}
+
 pub struct SearchEngine {
     /// Maximum search depth
     max_depth: u8,
@@ -154,6 +172,8 @@ pub struct SearchEngine {
     previous_best_move: Option<Move>,
     /// Transposition table (optional for performance)
     transposition_table: Option<TranspositionTable>,
+    /// Killer moves for move ordering
+    killer_moves: KillerMoves,
 }
 
 impl SearchEngine {
@@ -167,6 +187,7 @@ impl SearchEngine {
             start_time: None,
             previous_best_move: None,
             transposition_table: None,
+            killer_moves: KillerMoves::new(),
         }
     }
 
@@ -180,6 +201,7 @@ impl SearchEngine {
             start_time: None,
             previous_best_move: None,
             transposition_table: Some(TranspositionTable::new(size_mb)),
+            killer_moves: KillerMoves::new(),
         }
     }
 
@@ -233,6 +255,9 @@ impl SearchEngine {
         if let Some(ref mut tt) = self.transposition_table {
             tt.new_search();
         }
+
+        // Clear killer moves for new search
+        self.killer_moves = KillerMoves::new();
 
         // Generate legal moves
         let legal_moves = position.generate_legal_moves()?;
@@ -428,17 +453,17 @@ impl SearchEngine {
         self.order_moves_with_pv(moves);
     }
 
-    /// Order moves with transposition table move priority
-    fn order_moves_with_tt(&self, moves: &mut [Move], tt_move: Option<Move>) {
+    /// Order moves with transposition table move priority and killer moves
+    fn order_moves_with_tt(&self, moves: &mut [Move], tt_move: Option<Move>, depth: usize) {
         moves.sort_by(|a, b| {
-            let a_priority = self.get_move_priority_with_tt(*a, tt_move);
-            let b_priority = self.get_move_priority_with_tt(*b, tt_move);
+            let a_priority = self.get_move_priority_with_tt(*a, tt_move, depth);
+            let b_priority = self.get_move_priority_with_tt(*b, tt_move, depth);
             a_priority.cmp(&b_priority)
         });
     }
 
-    /// Get priority for move ordering including TT move (lower = higher priority)
-    fn get_move_priority_with_tt(&self, mv: Move, tt_move: Option<Move>) -> u8 {
+    /// Get priority for move ordering including TT move and killer moves (lower = higher priority)
+    fn get_move_priority_with_tt(&self, mv: Move, tt_move: Option<Move>, depth: usize) -> u8 {
         // Highest priority: Transposition table move
         if let Some(tt_mv) = tt_move {
             if mv == tt_mv {
@@ -458,8 +483,68 @@ impl SearchEngine {
             return 2;
         }
 
+        // Fourth priority: Killer moves
+        if self.is_killer_move(mv, depth) {
+            return 3;
+        }
+
         // Lowest priority: Quiet moves
-        3
+        4
+    }
+
+    /// Store a killer move at the given depth
+    fn store_killer_move(&mut self, mv: Move, depth: usize) {
+        if depth >= 64 {
+            return; // Prevent out-of-bounds access
+        }
+
+        // Only store quiet moves as killers
+        if mv.move_type.is_capture() {
+            return;
+        }
+
+        // If this move is not already the primary killer
+        if self.killer_moves.primary[depth] != Some(mv) {
+            // Promote current primary to secondary
+            self.killer_moves.secondary[depth] = self.killer_moves.primary[depth];
+            // Store new move as primary
+            self.killer_moves.primary[depth] = Some(mv);
+        }
+    }
+
+    /// Check if a move is a killer move at the given depth
+    fn is_killer_move(&self, mv: Move, depth: usize) -> bool {
+        if depth >= 64 {
+            return false;
+        }
+
+        self.killer_moves.primary[depth] == Some(mv)
+            || self.killer_moves.secondary[depth] == Some(mv)
+    }
+
+    /// Order moves with killer moves included
+    fn order_moves_with_killers(&self, moves: &mut [Move], depth: usize) {
+        moves.sort_by(|a, b| {
+            let a_priority = self.get_move_priority_with_killers(*a, depth);
+            let b_priority = self.get_move_priority_with_killers(*b, depth);
+            a_priority.cmp(&b_priority)
+        });
+    }
+
+    /// Get priority for move ordering including killer moves (lower = higher priority)
+    fn get_move_priority_with_killers(&self, mv: Move, depth: usize) -> u8 {
+        // Captures first
+        if mv.move_type.is_capture() || mv.move_type.is_promotion() {
+            return 0;
+        }
+
+        // Killer moves next
+        if self.is_killer_move(mv, depth) {
+            return 1;
+        }
+
+        // Regular quiet moves last
+        2
     }
 
     /// Alpha-beta pruning search implementation
@@ -506,9 +591,9 @@ impl SearchEngine {
             }
         }
 
-        // Order moves for better pruning, prioritizing TT move
+        // Order moves for better pruning, prioritizing TT move and killer moves
         let mut ordered_moves = legal_moves;
-        self.order_moves_with_tt(&mut ordered_moves, tt_move);
+        self.order_moves_with_tt(&mut ordered_moves, tt_move, depth as usize);
 
         let original_alpha = alpha;
         let mut best_move: Option<Move> = None;
@@ -534,6 +619,10 @@ impl SearchEngine {
                     // Alpha-beta pruning
                     if beta <= alpha {
                         self.nodes_pruned += 1;
+                        // Store killer move if it's a quiet move that caused cutoff
+                        if !mv.move_type.is_capture() {
+                            self.store_killer_move(mv, depth as usize);
+                        }
                         break;
                     }
                 }
@@ -559,6 +648,10 @@ impl SearchEngine {
                     // Alpha-beta pruning
                     if beta <= alpha {
                         self.nodes_pruned += 1;
+                        // Store killer move if it's a quiet move that caused cutoff
+                        if !mv.move_type.is_capture() {
+                            self.store_killer_move(mv, depth as usize);
+                        }
                         break;
                     }
                 }
@@ -814,6 +907,72 @@ mod tests {
         assert!(
             !moves[3].move_type.is_capture(),
             "Fourth move should not be a capture"
+        );
+    }
+
+    #[test]
+    fn test_killer_moves_ordering() {
+        let mut engine = SearchEngine::new();
+
+        // Create test moves
+        let killer_move = Move::quiet(
+            crate::types::Square::from_algebraic("e2").unwrap(),
+            crate::types::Square::from_algebraic("e4").unwrap(),
+        );
+        let regular_quiet = Move::quiet(
+            crate::types::Square::from_algebraic("d2").unwrap(),
+            crate::types::Square::from_algebraic("d3").unwrap(),
+        );
+        let capture_move = Move::capture(
+            crate::types::Square::from_algebraic("b2").unwrap(),
+            crate::types::Square::from_algebraic("c3").unwrap(),
+        );
+
+        // Store killer move at depth 2
+        engine.store_killer_move(killer_move, 2);
+
+        let mut moves = vec![regular_quiet, killer_move, capture_move];
+        engine.order_moves_with_killers(&mut moves, 2);
+
+        // Order should be: capture, killer, regular quiet
+        assert!(moves[0].move_type.is_capture(), "Capture should be first");
+        assert_eq!(moves[1], killer_move, "Killer move should be second");
+        assert_eq!(moves[2], regular_quiet, "Regular quiet should be last");
+    }
+
+    #[test]
+    fn test_killer_moves_storage() {
+        let mut engine = SearchEngine::new();
+
+        let move1 = Move::quiet(
+            crate::types::Square::from_algebraic("e2").unwrap(),
+            crate::types::Square::from_algebraic("e4").unwrap(),
+        );
+        let move2 = Move::quiet(
+            crate::types::Square::from_algebraic("d2").unwrap(),
+            crate::types::Square::from_algebraic("d4").unwrap(),
+        );
+
+        // Store first killer move
+        engine.store_killer_move(move1, 3);
+        assert!(
+            engine.is_killer_move(move1, 3),
+            "Should recognize stored killer move"
+        );
+        assert!(
+            !engine.is_killer_move(move2, 3),
+            "Should not recognize unstored move"
+        );
+
+        // Store second killer move (should promote first to secondary)
+        engine.store_killer_move(move2, 3);
+        assert!(
+            engine.is_killer_move(move1, 3),
+            "First move should still be killer (secondary)"
+        );
+        assert!(
+            engine.is_killer_move(move2, 3),
+            "Second move should be killer (primary)"
         );
     }
 

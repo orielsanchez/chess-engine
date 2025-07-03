@@ -1,6 +1,6 @@
+use crate::moves::Move;
 use crate::position::Position;
 use crate::types::*;
-use crate::moves::Move;
 use std::fmt;
 use std::sync::LazyLock;
 
@@ -329,10 +329,10 @@ impl TranspositionTable {
     pub fn new(size_mb: usize) -> Self {
         let entry_size = std::mem::size_of::<TTEntry>();
         let num_entries = (size_mb * 1024 * 1024) / entry_size;
-        
+
         // Round down to nearest power of 2 for fast indexing
         let power_of_2_entries = num_entries.next_power_of_two() / 2;
-        
+
         Self {
             entries: vec![TTEntry::default(); power_of_2_entries],
             generation: 0,
@@ -375,16 +375,23 @@ impl TranspositionTable {
     }
 
     /// Store an entry in the table
-    pub fn store(&mut self, hash: u64, score: i32, depth: u8, best_move: Option<Move>, node_type: NodeType) {
+    pub fn store(
+        &mut self,
+        hash: u64,
+        score: i32,
+        depth: u8,
+        best_move: Option<Move>,
+        node_type: NodeType,
+    ) {
         let index = self.get_index(hash);
         let current = &self.entries[index];
 
         // Replacement strategy: always replace if empty or same position
         // For different positions, only replace if deeper search or entry is old
-        let should_replace = current.hash == 0 || 
-                            current.hash == hash || 
-                            (current.hash != hash && 
-                             (depth >= current.depth || current.age < self.generation.saturating_sub(2)));
+        let should_replace = current.hash == 0
+            || current.hash == hash
+            || (current.hash != hash
+                && (depth >= current.depth || current.age < self.generation.saturating_sub(2)));
 
         if should_replace {
             self.entries[index] = TTEntry {
@@ -764,14 +771,14 @@ mod tests {
         // Probe should hit
         let entry = tt.probe(hash, depth);
         assert!(entry.is_some(), "Should find stored entry");
-        
+
         let entry = entry.unwrap();
         assert_eq!(entry.hash, hash);
         assert_eq!(entry.score, score);
         assert_eq!(entry.depth, depth);
         assert_eq!(entry.best_move, Some(mv));
         assert_eq!(entry.node_type, NodeType::Exact);
-        
+
         assert_eq!(tt.hits, 1, "Should have 1 hit");
         assert_eq!(tt.stores, 1, "Should have 1 store");
     }
@@ -831,7 +838,10 @@ mod tests {
         // Store deeper entry for same position (should replace)
         tt.store(hash, 200, 5, None, NodeType::UpperBound);
         let entry2 = tt.probe(hash, 3).unwrap();
-        assert_eq!(entry2.depth, 5, "Deeper entry should replace shallower for same position");
+        assert_eq!(
+            entry2.depth, 5,
+            "Deeper entry should replace shallower for same position"
+        );
         assert_eq!(entry2.score, 200);
     }
 
@@ -846,7 +856,10 @@ mod tests {
 
         // Clear table
         tt.clear();
-        assert!(tt.probe(hash, 5).is_none(), "Entry should be gone after clear");
+        assert!(
+            tt.probe(hash, 5).is_none(),
+            "Entry should be gone after clear"
+        );
         assert_eq!(tt.hits, 0, "Stats should be reset");
         assert_eq!(tt.misses, 1, "Miss from probe after clear");
         assert_eq!(tt.stores, 0, "Store count should be reset");
@@ -855,19 +868,19 @@ mod tests {
     #[test]
     fn test_tt_collision_detection() {
         let mut tt = TranspositionTable::new(1);
-        
+
         // Find two hashes that map to the same index
         let hash1 = 0x1000000000000000;
         let hash2 = 0x2000000000000000;
-        
+
         // Make sure they map to the same index
         let index1 = (hash1 as usize) & (tt.size() - 1);
         let index2 = (hash2 as usize) & (tt.size() - 1);
-        
+
         if index1 == index2 {
             // Store first entry
             tt.store(hash1, 100, 5, None, NodeType::Exact);
-            
+
             // Probe with different hash should miss and count as collision
             let entry = tt.probe(hash2, 5);
             assert!(entry.is_none(), "Should miss on hash collision");

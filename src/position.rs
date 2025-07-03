@@ -1,6 +1,6 @@
 use crate::board::{Board, BoardError};
-use crate::types::*;
 use crate::transposition::ZOBRIST_HASHER;
+use crate::types::*;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -332,7 +332,9 @@ impl Position {
             self.fullmove_number += 1;
         }
         // Update zobrist hash for side change
-        self.zobrist_hash = ZOBRIST_HASHER.update_side_to_move(self.zobrist_hash).unwrap_or(self.zobrist_hash);
+        self.zobrist_hash = ZOBRIST_HASHER
+            .update_side_to_move(self.zobrist_hash)
+            .unwrap_or(self.zobrist_hash);
     }
 
     /// Get the current zobrist hash of this position
