@@ -39,6 +39,35 @@ fn main() {
         Err(e) => println!("✗ Failed to parse custom FEN: {}", e),
     }
     
+    // Test move generation
+    println!("\n--- Move Generation Testing ---");
+    let legal_moves = position.generate_legal_moves();
+    println!("Legal moves from starting position: {}", legal_moves.len());
+    
+    // Show first few moves
+    println!("First 10 moves:");
+    for (i, mv) in legal_moves.iter().take(10).enumerate() {
+        println!("  {}: {}", i + 1, mv);
+    }
+    
+    // Test position after 1.e4
+    if let Ok(e4_position) = Position::from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1") {
+        let e4_moves = e4_position.generate_legal_moves();
+        println!("\nLegal moves after 1.e4: {}", e4_moves.len());
+        
+        // Show pawn moves for Black
+        println!("Black pawn moves:");
+        for mv in e4_moves.iter().filter(|m| {
+            if let Some(piece) = e4_position.piece_at(m.from) {
+                piece.piece_type == PieceType::Pawn
+            } else {
+                false
+            }
+        }).take(5) {
+            println!("  {}", mv);
+        }
+    }
+    
     // Test basic functionality
     println!("\n--- Basic Functionality ---");
     println!("Side to move: {}", position.side_to_move);

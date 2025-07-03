@@ -3,24 +3,24 @@
 ## Backlog
 
 ### Foundation
-- [ ] Define core data types (Square, Piece, Color, PieceType)
-- [ ] Implement basic board representation (8x8 array)
-- [ ] Create position structure with game state
-- [ ] Add FEN parsing and generation
-- [ ] Implement basic move validation
-- [ ] Add castling rights tracking
-- [ ] Implement en passant handling
-- [ ] Add fifty-move rule tracking
+- [x] Define core data types (Square, Piece, Color, PieceType)
+- [x] Implement basic board representation (8x8 array)
+- [x] Create position structure with game state
+- [x] Add FEN parsing and generation
+- [x] Implement basic move validation
+- [x] Add castling rights tracking
+- [x] Implement en passant handling
+- [x] Add fifty-move rule tracking
 
 ### Move Generation
-- [ ] Generate pawn moves (including promotions)
-- [ ] Generate knight moves
-- [ ] Generate bishop moves
-- [ ] Generate rook moves
-- [ ] Generate queen moves
-- [ ] Generate king moves
-- [ ] Generate castling moves
-- [ ] Filter illegal moves (king in check)
+- [x] Generate pawn moves (including promotions)
+- [x] Generate knight moves
+- [x] Generate bishop moves
+- [x] Generate rook moves
+- [x] Generate queen moves
+- [x] Generate king moves
+- [x] Generate castling moves
+- [x] Filter illegal moves (king in check)
 - [ ] Optimize move generation with bitboards
 
 ### Search Engine
@@ -68,7 +68,8 @@
 ## In Progress
 
 ### Currently Working On
-- Implement basic move validation
+- Search Engine implementation (minimax algorithm)
+- Position evaluation system
 
 ## Done
 
@@ -84,6 +85,12 @@
 - Add FEN parsing and generation
 - FEN roundtrip conversion with validation
 - Comprehensive error handling for invalid FEN
+- Complete move generation system
+- Pawn moves with promotions and en passant
+- All piece move generation (knight, bishop, rook, queen, king)
+- Castling move generation with validation
+- Legal move filtering (removes moves leaving king in check)
+- Position state updates (castling rights, en passant, clocks)
 
 ## Testing Strategy
 
