@@ -4,9 +4,9 @@ We're building production-quality code together. Your role is to create maintain
 
 When you seem stuck or overly complex, I'll redirect you - my guidance helps you stay on track.
 
-## 🚨 AUTOMATED CHECKS ARE MANDATORY
+## AUTOMATED CHECKS ARE MANDATORY
 
-**ALL hook issues are BLOCKING - EVERYTHING must be ✅ GREEN!**  
+**ALL hook issues are BLOCKING - EVERYTHING must be GREEN!**  
 No errors. No formatting issues. No linting problems. Zero tolerance.  
 These are not suggestions. Fix ALL issues before continuing.
 
@@ -35,7 +35,7 @@ _Leverage subagents aggressively_ for better results:
 
 Say: "I'll spawn agents to tackle different aspects of this problem" whenever a task has multiple independent parts.
 
-### Reality Checkpoints
+### Enhanced Reality Checkpoints
 
 **Stop and validate** at these moments:
 
@@ -43,18 +43,24 @@ Say: "I'll spawn agents to tackle different aspects of this problem" whenever a 
 - Before starting a new major component
 - When something feels wrong
 - Before declaring "done"
-- **WHEN HOOKS FAIL WITH ERRORS** ❌
+- **WHEN HOOKS FAIL WITH ERRORS** (BLOCKING)
+
+**Knowledge checkpoints:**
+- After every major component: Explain the design choices made
+- Before declaring "done": Can I implement this again without AI?
+- Weekly: Review and explain recent patterns learned
+- Monthly: Implement something similar from scratch to test retention
 
 Run: `cargo fmt && cargo test && cargo clippy`
 
-> Why: You can lose track of what's actually working. These checkpoints prevent cascading failures.
+> Why: You can lose track of what's actually working. These checkpoints prevent cascading failures and knowledge brownouts.
 
-### 🚨 CRITICAL: Hook Failures Are BLOCKING
+### CRITICAL: Hook Failures Are BLOCKING
 
 **When hooks report ANY issues (exit code 2), you MUST:**
 
 1. **STOP IMMEDIATELY** - Do not continue with other tasks
-2. **FIX ALL ISSUES** - Address every ❌ issue until everything is ✅ GREEN
+2. **FIX ALL ISSUES** - Address every issue until everything is GREEN
 3. **VERIFY THE FIX** - Re-run the failed command to confirm it's fixed
 4. **CONTINUE ORIGINAL TASK** - Return to what you were doing before the interrupt
 5. **NEVER IGNORE** - There are NO warnings, only requirements
@@ -73,6 +79,67 @@ Your code must be 100% clean. No exceptions.
 - When interrupted by a hook failure, maintain awareness of your original task
 - After fixing all issues and verifying the fix, continue where you left off
 - Use the todo list to track both the fix and your original task
+
+## Knowledge Preservation Protocol
+
+### Before AI Assistance:
+- State your hypothesis about the problem/approach
+- Identify which concepts you want to understand deeply
+- Set learning objectives: "I want to understand X pattern"
+
+### During Implementation:
+- Explain the "why" behind each architectural decision
+- Connect new patterns to existing knowledge
+- Document mental models and intuition being built
+
+### After Completion:
+- Summarize key insights gained
+- Update personal knowledge base with new patterns
+- Identify areas for deeper independent study
+
+## Test-Driven Development Protocol
+
+**"Write the test, let AI satisfy the contract" - TDD with AI reduces debugging by 90%**
+
+### The TDD-AI Feedback Loop:
+
+1. **RED**: Write a failing test that defines the exact behavior
+   - Be specific about inputs, outputs, and edge cases
+   - Test the interface you wish existed
+   - Document assumptions and constraints in tests
+
+2. **GREEN**: Let AI implement the minimal code to pass
+   - Provide the failing test as context
+   - Ask AI to implement ONLY what's needed to pass
+   - Resist over-engineering at this stage
+
+3. **REFACTOR**: Improve design with test safety net
+   - Clean up implementation with AI assistance
+   - Tests ensure behavior preservation
+   - Extract patterns and improve architecture
+
+### TDD Commands Integration:
+- Use `/tdd <feature>` to start test-first development
+- All `/next` commands should begin with test design
+- `/check` validates both implementation AND test quality
+
+### TDD Learning Objectives:
+- **Requirements Clarity**: Tests force precise thinking about behavior
+- **Interface Design**: Write tests for the API you want to use
+- **Regression Protection**: Changes can't break existing behavior
+- **Documentation**: Tests serve as executable specifications
+
+### Senior-Level TDD Thinking:
+- Tests reveal design problems before implementation
+- Good tests enable fearless refactoring
+- Test structure mirrors system architecture
+- Edge cases in tests prevent production surprises
+
+**Why This Works With AI:**
+- Tests provide unambiguous specifications
+- AI can't misinterpret test requirements
+- Failing tests guide AI toward correct solutions
+- Passing tests validate AI implementations
 
 ## Working Memory Management
 
@@ -101,6 +168,7 @@ Your code must be 100% clean. No exceptions.
 
 - **NO unwrap()** or **expect()** in production code - use proper error handling!
 - **NO panic!()** - use `Result<T, E>` for error handling!
+- **NO emojis** in code, comments, documentation, commit messages, or any project files
 - **NO** keeping old and new code together
 - **NO** migration functions or compatibility layers
 - **NO** versioned function names (process_v2, handle_new)
@@ -108,8 +176,8 @@ Your code must be 100% clean. No exceptions.
 - **NO** TODOs in final code
 - **NO** unsafe blocks without explicit justification
 
-> **AUTOMATED ENFORCEMENT**: The clippy hook will BLOCK commits that violate these rules.  
-> When you see `❌ FORBIDDEN PATTERN`, you MUST fix it immediately!
+**AUTOMATED ENFORCEMENT**: The clippy hook will BLOCK commits that violate these rules.  
+When you see "FORBIDDEN PATTERN", you MUST fix it immediately!
 
 ### Required Standards:
 
@@ -125,33 +193,33 @@ Your code must be 100% clean. No exceptions.
 ### Example Patterns:
 
 ```rust
-// ✅ GOOD: Proper error handling
+// GOOD: Proper error handling
 fn parse_config(path: &Path) -> Result<Config, ConfigError> {
     let content = fs::read_to_string(path)?;
     toml::from_str(&content).map_err(ConfigError::Parse)
 }
 
-// ❌ BAD: Using unwrap
+// BAD: Using unwrap
 fn parse_config(path: &Path) -> Config {
     let content = fs::read_to_string(path).unwrap();
     toml::from_str(&content).unwrap()
 }
 
-// ✅ GOOD: Constructor pattern
+// GOOD: Constructor pattern
 impl Server {
     fn new(config: Config) -> Self {
         Self { config }
     }
 }
 
-// ✅ GOOD: Async with proper error handling
+// GOOD: Async with proper error handling
 async fn fetch_data(url: &str) -> Result<Data, reqwest::Error> {
     let response = reqwest::get(url).await?;
     let data = response.json().await?;
     Ok(data)
 }
 
-// ✅ GOOD: Channel synchronization
+// GOOD: Channel synchronization
 use tokio::sync::mpsc;
 
 async fn worker(mut rx: mpsc::Receiver<Task>) {
@@ -165,11 +233,11 @@ async fn worker(mut rx: mpsc::Receiver<Task>) {
 
 ### Our code is complete when:
 
-- ✅ All linters pass with zero issues
-- ✅ All tests pass
-- ✅ Feature works end-to-end
-- ✅ Old code is deleted
-- ✅ Documentation on all public items
+- All linters pass with zero issues
+- All tests pass
+- Feature works end-to-end
+- Old code is deleted
+- Documentation on all public items
 
 ### Testing Strategy
 
@@ -227,15 +295,42 @@ My insights on better approaches are valued - please ask for them!
 ### Progress Updates:
 
 ```
-✓ Implemented authentication (all tests passing)
-✓ Added rate limiting
-✗ Found issue with token expiration - investigating
+- Implemented authentication (all tests passing)
+- Added rate limiting
+- Found issue with token expiration - investigating
 ```
 
 ### Suggesting Improvements:
 
 "The current approach works, but I notice [observation].
 Would you like me to [specific improvement]?"
+
+## Rust Mastery Progression
+
+### Current Focus: [Update weekly]
+- Target concept: Memory safety and ownership patterns
+- Learning method: Implement data structures from scratch
+- Knowledge gap: Advanced lifetime management
+
+### Depth Markers:
+- **Novice**: Can use with AI guidance
+- **Intermediate**: Can explain to others
+- **Advanced**: Can implement from first principles
+- **Expert**: Can teach and extend the concept
+
+### Mastery Areas to Track:
+- **Ownership & Borrowing**: Novice → Intermediate → Advanced → Expert
+- **Async/Await Internals**: Novice → Intermediate → Advanced → Expert
+- **Memory Layout & Performance**: Novice → Intermediate → Advanced → Expert
+- **Error Handling Patterns**: Novice → Intermediate → Advanced → Expert
+- **Concurrency Primitives**: Novice → Intermediate → Advanced → Expert
+- **Test-Driven Development**: Novice → Intermediate → Advanced → Expert
+
+### TDD Mastery Progression:
+- **Novice**: Can write basic tests with guidance - Following examples and patterns
+- **Intermediate**: Can design test suites independently - Understanding when and what to test
+- **Advanced**: Can use TDD to drive architecture - Tests reveal design decisions
+- **Expert**: Can teach TDD patterns to others - Mentor others in test-first thinking
 
 ## Working Together
 

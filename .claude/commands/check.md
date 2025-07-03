@@ -3,7 +3,7 @@ allowed-tools: all
 description: Verify code quality, run tests, and ensure production readiness
 ---
 
-# 🚨🚨🚨 CRITICAL REQUIREMENT: FIX ALL ERRORS! 🚨🚨🚨
+# CRITICAL REQUIREMENT: FIX ALL ERRORS!
 
 **THIS IS NOT A REPORTING TASK - THIS IS A FIXING TASK!**
 
@@ -17,16 +17,16 @@ When you run `/check`, you are REQUIRED to:
    - Spawn more agents for different files/modules
    - Say: "I'll spawn multiple agents to fix all these issues in parallel"
 4. **DO NOT STOP** until:
-   - ✅ ALL linters pass with ZERO warnings
-   - ✅ ALL tests pass
-   - ✅ Build succeeds
-   - ✅ EVERYTHING is GREEN
+   - ALL linters pass with ZERO warnings
+   - ALL tests pass
+   - Build succeeds
+   - EVERYTHING is GREEN
 
 **FORBIDDEN BEHAVIORS:**
-- ❌ "Here are the issues I found" → NO! FIX THEM!
-- ❌ "The linter reports these problems" → NO! RESOLVE THEM!
-- ❌ "Tests are failing because..." → NO! MAKE THEM PASS!
-- ❌ Stopping after listing issues → NO! KEEP WORKING!
+- "Here are the issues I found" → NO! FIX THEM!
+- "The linter reports these problems" → NO! RESOLVE THEM!
+- "Tests are failing because..." → NO! MAKE THEM PASS!
+- Stopping after listing issues → NO! KEEP WORKING!
 
 **MANDATORY WORKFLOW:**
 ```
@@ -45,7 +45,7 @@ When you run `/check`, you are REQUIRED to:
 
 ---
 
-🛑 **MANDATORY PRE-FLIGHT CHECK** 🛑
+**MANDATORY PRE-FLIGHT CHECK**
 1. Re-read ~/.claude/CLAUDE.md RIGHT NOW
 2. Check current TODO.md status
 3. Verify you're not declaring "done" prematurely
@@ -61,7 +61,7 @@ Execute comprehensive quality checks with ZERO tolerance for excuses.
 
 Let me ultrathink about validating this codebase against our exceptional standards.
 
-🚨 **REMEMBER: Hooks will verify EVERYTHING and block on violations!** 🚨
+**REMEMBER: Hooks will verify EVERYTHING and block on violations!**
 
 **Universal Quality Verification Protocol:**
 
@@ -156,7 +156,7 @@ When issues are found:
 2. **FIX EVERYTHING** - Address EVERY issue, no matter how "minor"
 3. **VERIFY** - Re-run all checks after fixes
 4. **REPEAT** - If new issues found, spawn more agents and fix those too
-5. **NO STOPPING** - Keep working until ALL checks show ✅ GREEN
+5. **NO STOPPING** - Keep working until ALL checks show GREEN
 6. **NO EXCUSES** - Common invalid excuses:
    - "It's just formatting" → Auto-format it NOW
    - "It's a false positive" → Prove it or fix it NOW
@@ -166,30 +166,30 @@ When issues are found:
 
 **Final Verification:**
 The code is ready when:
-✓ make lint: PASSES with zero warnings
-✓ make test: PASSES all tests
-✓ go test -race: NO race conditions
-✓ All checklist items verified
-✓ Feature works end-to-end in realistic scenarios
-✓ Error paths tested and handle gracefully
+- make lint: PASSES with zero warnings
+- make test: PASSES all tests
+- go test -race: NO race conditions
+- All checklist items verified
+- Feature works end-to-end in realistic scenarios
+- Error paths tested and handle gracefully
 
 **Final Commitment:**
 I will now execute EVERY check listed above and FIX ALL ISSUES. I will:
-- ✅ Run all checks to identify issues
-- ✅ SPAWN MULTIPLE AGENTS to fix issues in parallel
-- ✅ Keep working until EVERYTHING passes
-- ✅ Not stop until all checks show passing status
+- Run all checks to identify issues
+- SPAWN MULTIPLE AGENTS to fix issues in parallel
+- Keep working until EVERYTHING passes
+- Not stop until all checks show passing status
 
 I will NOT:
-- ❌ Just report issues without fixing them
-- ❌ Skip any checks
-- ❌ Rationalize away issues
-- ❌ Declare "good enough"
-- ❌ Stop at "mostly passing"
-- ❌ Stop working while ANY issues remain
+- Just report issues without fixing them
+- Skip any checks
+- Rationalize away issues
+- Declare "good enough"
+- Stop at "mostly passing"
+- Stop working while ANY issues remain
 
 **REMEMBER: This is a FIXING task, not a reporting task!**
 
-The code is ready ONLY when every single check shows ✅ GREEN.
+The code is ready ONLY when every single check shows GREEN.
 
 **Executing comprehensive validation and FIXING ALL ISSUES NOW...**

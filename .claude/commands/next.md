@@ -3,18 +3,26 @@ allowed-tools: all
 description: Execute production-quality implementation with strict standards
 ---
 
-🚨 **CRITICAL WORKFLOW - NO SHORTCUTS!** 🚨
+**CRITICAL WORKFLOW - NO SHORTCUTS!**
 
 You are tasked with implementing: $ARGUMENTS
 
 **MANDATORY SEQUENCE:**
-1. 🔍 **RESEARCH FIRST** - "Let me research the codebase and create a plan before implementing"
-2. 📋 **PLAN** - Present a detailed plan and verify approach
-3. ✅ **IMPLEMENT** - Execute with validation checkpoints
+1. **RESEARCH FIRST** - "Let me research the codebase and create a plan before implementing"
+2. **PLAN** - Present a detailed plan and verify approach
+3. **TEST DESIGN** - Write failing tests that define the behavior (TDD RED phase)
+4. **IMPLEMENT** - Let AI satisfy the test contracts (TDD GREEN phase)
+5. **REFACTOR** - Improve design with test safety net (TDD BLUE phase)
 
 **YOU MUST SAY:** "Let me research the codebase and create a plan before implementing."
 
 For complex tasks, say: "Let me ultrathink about this architecture before proposing a solution."
+
+**TDD INTEGRATION:**
+- Step 3 (TEST DESIGN): Write tests for the interface you wish existed
+- Step 4 (IMPLEMENT): Provide failing tests as context to AI
+- Step 5 (REFACTOR): Use tests as safety net for improvements
+- Follow the TDD-AI feedback loop: RED → GREEN → BLUE
 
 **USE MULTIPLE AGENTS** when the task has independent parts:
 "I'll spawn agents to tackle different aspects of this problem"
@@ -23,7 +31,7 @@ Consult ~/.claude/CLAUDE.md IMMEDIATELY and follow it EXACTLY.
 
 **Critical Requirements:**
 
-🛑 **HOOKS ARE WATCHING** 🛑
+**HOOKS ARE WATCHING**
 The smart-lint.sh hook will verify EVERYTHING. It will:
 - Block operations if you ignore linter warnings
 - Track repeated violations
@@ -98,7 +106,7 @@ The smart-lint.sh hook will verify EVERYTHING. It will:
 - Do NOT use blocking operations in async contexts
 - Do NOT ignore clippy suggestions - they're usually right
 
-**Completion Checklist (ALL must be ✅):**
+**Completion Checklist (ALL must be checked):**
 - [ ] Research phase completed with codebase understanding
 - [ ] Plan reviewed and approach validated  
 - [ ] ALL linters pass with ZERO warnings (cargo clippy)
