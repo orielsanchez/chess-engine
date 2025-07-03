@@ -108,26 +108,63 @@ fn main() {
         println!("Black king in check: {}", position.is_check(Color::Black));
     }
 
-    // Test Search Engine
+    // Test Search Engine with Iterative Deepening
     println!("\n--- Testing Search Engine ---");
     let mut search_engine = chess_engine::search::SearchEngine::new();
-    search_engine.set_max_depth(3); // Shallow search for demo speed
+    search_engine.set_max_depth(5); // Deeper search to show iterative deepening
 
     match search_engine.find_best_move(&position) {
         Ok(result) => {
-            println!("✓ Search completed successfully!");
+            println!("✓ Iterative deepening search completed!");
             println!("Best move: {}", result.best_move);
             println!("Evaluation: {} centipawns", result.evaluation);
-            println!("Depth: {}", result.depth);
+            println!("Target depth: {}", result.depth);
+            println!("Completed depth: {}", result.completed_depth);
+            println!("Iterations: {}", result.iterations_completed);
             println!("Nodes searched: {}", result.nodes_searched);
+            println!("Nodes pruned: {}", result.nodes_pruned);
+            println!("Time limited: {}", result.time_limited);
             println!("Time: {}ms", result.time_ms);
+        }
+        Err(e) => {
+            println!("✗ Search failed: {}", e);
+        }
+    }
+
+    // Test time-controlled search
+    println!("\n--- Testing Time-Controlled Search ---");
+    match search_engine.find_best_move_timed(&position, 100) {
+        Ok(result) => {
+            println!("✓ Time-controlled search completed!");
+            println!("Best move: {}", result.best_move);
+            println!("Evaluation: {} centipawns", result.evaluation);
+            println!("Completed depth: {}", result.completed_depth);
+            println!("Iterations: {}", result.iterations_completed);
+            println!("Time limited: {}", result.time_limited);
+            println!("Time: {}ms (limit: 100ms)", result.time_ms);
+        }
+        Err(e) => {
+            println!("✗ Time-controlled search failed: {}", e);
+        }
+    }
+
+    // Test constrained search
+    println!("\n--- Testing Constrained Search ---");
+    match search_engine.find_best_move_constrained(&position, 3, 500) {
+        Ok(result) => {
+            println!("✓ Constrained search completed!");
+            println!("Best move: {}", result.best_move);
+            println!("Target depth: {} (limit: 3)", result.depth);
+            println!("Completed depth: {}", result.completed_depth);
+            println!("Iterations: {}", result.iterations_completed);
+            println!("Time: {}ms (limit: 500ms)", result.time_ms);
 
             // Demonstrate position evaluation
             let eval = position.evaluate();
             println!("Starting position evaluation: {} centipawns", eval);
         }
         Err(e) => {
-            println!("✗ Search failed: {}", e);
+            println!("✗ Constrained search failed: {}", e);
         }
     }
 }

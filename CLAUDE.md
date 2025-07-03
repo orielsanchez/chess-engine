@@ -5,6 +5,7 @@ We're building production-quality code together. Your role is to create maintain
 When you seem stuck or overly complex, I'll redirect you - my guidance helps you stay on track.
 
 ## 🚨 AUTOMATED CHECKS ARE MANDATORY
+
 **ALL hook issues are BLOCKING - EVERYTHING must be ✅ GREEN!**  
 No errors. No formatting issues. No linting problems. Zero tolerance.  
 These are not suggestions. Fix ALL issues before continuing.
@@ -12,9 +13,11 @@ These are not suggestions. Fix ALL issues before continuing.
 ## CRITICAL WORKFLOW - ALWAYS FOLLOW THIS!
 
 ### Research → Plan → Implement
+
 **NEVER JUMP STRAIGHT TO CODING!** Always follow this sequence:
+
 1. **Research**: Explore the codebase, understand existing patterns
-2. **Plan**: Create a detailed implementation plan and verify it with me  
+2. **Plan**: Create a detailed implementation plan and verify it with me
 3. **Implement**: Execute the plan with validation checkpoints
 
 When asked to implement any feature, you'll first say: "Let me research the codebase and create a plan before implementing."
@@ -22,19 +25,22 @@ When asked to implement any feature, you'll first say: "Let me research the code
 For complex architectural decisions or challenging problems, use **"ultrathink"** to engage maximum reasoning capacity. Say: "Let me ultrathink about this architecture before proposing a solution."
 
 ### USE MULTIPLE AGENTS!
-*Leverage subagents aggressively* for better results:
 
-* Spawn agents to explore different parts of the codebase in parallel
-* Use one agent to write tests while another implements features
-* Delegate research tasks: "I'll have an agent investigate the database schema while I analyze the API structure"
-* For complex refactors: One agent identifies changes, another implements them
+_Leverage subagents aggressively_ for better results:
+
+- Spawn agents to explore different parts of the codebase in parallel
+- Use one agent to write tests while another implements features
+- Delegate research tasks: "I'll have an agent investigate the database schema while I analyze the API structure"
+- For complex refactors: One agent identifies changes, another implements them
 
 Say: "I'll spawn agents to tackle different aspects of this problem" whenever a task has multiple independent parts.
 
 ### Reality Checkpoints
+
 **Stop and validate** at these moments:
+
 - After implementing a complete feature
-- Before starting a new major component  
+- Before starting a new major component
 - When something feels wrong
 - Before declaring "done"
 - **WHEN HOOKS FAIL WITH ERRORS** ❌
@@ -44,7 +50,9 @@ Run: `cargo fmt && cargo test && cargo clippy`
 > Why: You can lose track of what's actually working. These checkpoints prevent cascading failures.
 
 ### 🚨 CRITICAL: Hook Failures Are BLOCKING
+
 **When hooks report ANY issues (exit code 2), you MUST:**
+
 1. **STOP IMMEDIATELY** - Do not continue with other tasks
 2. **FIX ALL ISSUES** - Address every ❌ issue until everything is ✅ GREEN
 3. **VERIFY THE FIX** - Re-run the failed command to confirm it's fixed
@@ -52,6 +60,7 @@ Run: `cargo fmt && cargo test && cargo clippy`
 5. **NEVER IGNORE** - There are NO warnings, only requirements
 
 This includes:
+
 - Formatting issues (rustfmt)
 - Linting violations (clippy)
 - Forbidden patterns (unsafe blocks, unwrap(), panic!())
@@ -60,6 +69,7 @@ This includes:
 Your code must be 100% clean. No exceptions.
 
 **Recovery Protocol:**
+
 - When interrupted by a hook failure, maintain awareness of your original task
 - After fixing all issues and verifying the fix, continue where you left off
 - Use the todo list to track both the fix and your original task
@@ -67,16 +77,18 @@ Your code must be 100% clean. No exceptions.
 ## Working Memory Management
 
 ### When context gets long:
+
 - Re-read this CLAUDE.md file
 - Summarize progress in a PROGRESS.md file
 - Document current state before major changes
 
 ### Maintain TODO.md:
+
 ```
 ## Current Task
 - [ ] What we're doing RIGHT NOW
 
-## Completed  
+## Completed
 - [x] What's actually done and tested
 
 ## Next Steps
@@ -86,6 +98,7 @@ Your code must be 100% clean. No exceptions.
 ## Rust-Specific Rules
 
 ### FORBIDDEN - NEVER DO THESE:
+
 - **NO unwrap()** or **expect()** in production code - use proper error handling!
 - **NO panic!()** - use `Result<T, E>` for error handling!
 - **NO** keeping old and new code together
@@ -99,6 +112,7 @@ Your code must be 100% clean. No exceptions.
 > When you see `❌ FORBIDDEN PATTERN`, you MUST fix it immediately!
 
 ### Required Standards:
+
 - **Delete** old code when replacing it
 - **Meaningful names**: `user_id` not `id`
 - **Early returns** to reduce nesting
@@ -150,19 +164,23 @@ async fn worker(mut rx: mpsc::Receiver<Task>) {
 ## Implementation Standards
 
 ### Our code is complete when:
+
 - ✅ All linters pass with zero issues
-- ✅ All tests pass  
+- ✅ All tests pass
 - ✅ Feature works end-to-end
 - ✅ Old code is deleted
 - ✅ Documentation on all public items
 
 ### Testing Strategy
+
 - Complex business logic → Write tests first
+- Red -> Green -> Refactor
 - Simple CRUD → Write tests after
 - Hot paths → Add benchmarks
 - Skip tests for main() and simple CLI parsing
 
 ### Project Structure
+
 ```
 src/
 ├── main.rs       # Application entrypoint
@@ -178,6 +196,7 @@ benches/          # Benchmarks
 ## Problem-Solving Together
 
 When you're stuck or confused:
+
 1. **Stop** - Don't spiral into complex solutions
 2. **Delegate** - Consider spawning agents for parallel investigation
 3. **Ultrathink** - For complex problems, say "I need to ultrathink through this challenge" to engage deeper reasoning
@@ -190,12 +209,14 @@ My insights on better approaches are valued - please ask for them!
 ## Performance & Security
 
 ### **Measure First**:
+
 - No premature optimization
 - Benchmark before claiming something is faster
 - Use `cargo bench` for real bottlenecks
 - Profile with `perf` or `cargo flamegraph`
 
 ### **Security Always**:
+
 - Validate all inputs
 - Use `ring` or `rustls` for cryptography
 - Prepared statements for SQL (never concatenate!)
@@ -204,13 +225,15 @@ My insights on better approaches are valued - please ask for them!
 ## Communication Protocol
 
 ### Progress Updates:
+
 ```
 ✓ Implemented authentication (all tests passing)
-✓ Added rate limiting  
+✓ Added rate limiting
 ✗ Found issue with token expiration - investigating
 ```
 
 ### Suggesting Improvements:
+
 "The current approach works, but I notice [observation].
 Would you like me to [specific improvement]?"
 
