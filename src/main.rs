@@ -107,4 +107,27 @@ fn main() {
     if let Some(_king_square) = black_king {
         println!("Black king in check: {}", position.is_check(Color::Black));
     }
+
+    // Test Search Engine
+    println!("\n--- Testing Search Engine ---");
+    let mut search_engine = chess_engine::search::SearchEngine::new();
+    search_engine.set_max_depth(3); // Shallow search for demo speed
+
+    match search_engine.find_best_move(&position) {
+        Ok(result) => {
+            println!("✓ Search completed successfully!");
+            println!("Best move: {}", result.best_move);
+            println!("Evaluation: {} centipawns", result.evaluation);
+            println!("Depth: {}", result.depth);
+            println!("Nodes searched: {}", result.nodes_searched);
+            println!("Time: {}ms", result.time_ms);
+
+            // Demonstrate position evaluation
+            let eval = position.evaluate();
+            println!("Starting position evaluation: {} centipawns", eval);
+        }
+        Err(e) => {
+            println!("✗ Search failed: {}", e);
+        }
+    }
 }

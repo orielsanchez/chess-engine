@@ -123,6 +123,11 @@ impl Position {
         Ok(())
     }
 
+    /// Apply a move for search purposes (public wrapper around make_move_unchecked)
+    pub fn apply_move_for_search(&mut self, mv: Move) -> Result<(), MoveGenError> {
+        self.make_move_unchecked(mv)
+    }
+
     fn update_castling_rights(&mut self, mv: &Move) {
         let piece = self.piece_at(mv.to);
 
