@@ -1,5 +1,6 @@
 use crate::moves::Move;
 use crate::position::{Position, PositionError};
+use crate::transposition::{TranspositionTable, NodeType};
 use crate::types::MoveGenError;
 use std::fmt;
 
@@ -60,6 +61,12 @@ pub struct SearchResult {
     pub time_limited: bool,
     /// Number of iterative deepening iterations completed
     pub iterations_completed: u8,
+    /// Transposition table hit rate (0.0 to 1.0)
+    pub tt_hit_rate: f64,
+    /// Number of transposition table hits
+    pub tt_hits: u64,
+    /// Number of transposition table stores
+    pub tt_stores: u64,
 }
 
 impl SearchResult {
@@ -74,6 +81,9 @@ impl SearchResult {
             time_ms: 0,
             time_limited: false,
             iterations_completed: 1,
+            tt_hit_rate: 0.0,
+            tt_hits: 0,
+            tt_stores: 0,
         }
     }
 
@@ -90,6 +100,9 @@ impl SearchResult {
             time_ms: data.time_ms,
             time_limited: data.time_limited,
             iterations_completed: data.iterations_completed,
+            tt_hit_rate: data.tt_hit_rate,
+            tt_hits: data.tt_hits,
+            tt_stores: data.tt_stores,
         }
     }
 }
@@ -105,6 +118,9 @@ pub struct IterativeSearchData {
     pub time_ms: u64,
     pub time_limited: bool,
     pub iterations_completed: u8,
+    pub tt_hit_rate: f64,
+    pub tt_hits: u64,
+    pub tt_stores: u64,
 }
 
 /// Information needed to undo a move for search traversal
@@ -136,6 +152,8 @@ pub struct SearchEngine {
     start_time: Option<std::time::Instant>,
     /// Best move from previous iteration (for move ordering)
     previous_best_move: Option<Move>,
+    /// Transposition table (optional for performance)
+    transposition_table: Option<TranspositionTable>,
 }
 
 impl SearchEngine {
@@ -148,7 +166,36 @@ impl SearchEngine {
             nodes_pruned: 0,
             start_time: None,
             previous_best_move: None,
+            transposition_table: None,
         }
+    }
+
+    /// Create a new search engine with transposition table
+    pub fn with_transposition_table(size_mb: usize) -> Self {
+        Self {
+            max_depth: 4,
+            max_time_ms: None,
+            nodes_evaluated: 0,
+            nodes_pruned: 0,
+            start_time: None,
+            previous_best_move: None,
+            transposition_table: Some(TranspositionTable::new(size_mb)),
+        }
+    }
+
+    /// Enable transposition table with specified size
+    pub fn enable_transposition_table(&mut self, size_mb: usize) {
+        self.transposition_table = Some(TranspositionTable::new(size_mb));
+    }
+
+    /// Disable transposition table
+    pub fn disable_transposition_table(&mut self) {
+        self.transposition_table = None;
+    }
+
+    /// Check if transposition table is enabled
+    pub fn has_transposition_table(&self) -> bool {
+        self.transposition_table.is_some()
     }
 
     /// Set maximum search depth
@@ -181,6 +228,11 @@ impl SearchEngine {
         self.nodes_evaluated = 0;
         self.nodes_pruned = 0;
         self.start_time = Some(std::time::Instant::now());
+
+        // Initialize transposition table for new search
+        if let Some(ref mut tt) = self.transposition_table {
+            tt.new_search();
+        }
 
         // Generate legal moves
         let legal_moves = position.generate_legal_moves()?;
@@ -247,6 +299,13 @@ impl SearchEngine {
             .map(|start| start.elapsed().as_millis() as u64)
             .unwrap_or(0);
 
+        // Get transposition table statistics
+        let (tt_hit_rate, tt_hits, tt_stores) = if let Some(ref tt) = self.transposition_table {
+            (tt.hit_rate(), tt.hits, tt.stores)
+        } else {
+            (0.0, 0, 0)
+        };
+
         Ok(SearchResult::from_iterative_data(IterativeSearchData {
             best_move,
             evaluation: best_evaluation,
@@ -257,6 +316,9 @@ impl SearchEngine {
             time_ms: elapsed,
             time_limited,
             iterations_completed,
+            tt_hit_rate,
+            tt_hits,
+            tt_stores,
         }))
     }
 
@@ -366,13 +428,47 @@ impl SearchEngine {
         self.order_moves_with_pv(moves);
     }
 
+    /// Order moves with transposition table move priority
+    fn order_moves_with_tt(&self, moves: &mut [Move], tt_move: Option<Move>) {
+        moves.sort_by(|a, b| {
+            let a_priority = self.get_move_priority_with_tt(*a, tt_move);
+            let b_priority = self.get_move_priority_with_tt(*b, tt_move);
+            a_priority.cmp(&b_priority)
+        });
+    }
+
+    /// Get priority for move ordering including TT move (lower = higher priority)
+    fn get_move_priority_with_tt(&self, mv: Move, tt_move: Option<Move>) -> u8 {
+        // Highest priority: Transposition table move
+        if let Some(tt_mv) = tt_move {
+            if mv == tt_mv {
+                return 0;
+            }
+        }
+
+        // Second priority: Principal Variation move from previous iteration
+        if let Some(pv_move) = self.previous_best_move {
+            if mv == pv_move {
+                return 1;
+            }
+        }
+
+        // Third priority: Captures and promotions
+        if mv.move_type.is_capture() || mv.move_type.is_promotion() {
+            return 2;
+        }
+
+        // Lowest priority: Quiet moves
+        3
+    }
+
     /// Alpha-beta pruning search implementation
     fn alpha_beta(
         &mut self,
         position: &Position,
         depth: u8,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
         maximizing: bool,
     ) -> Result<i32, SearchError> {
         self.nodes_evaluated += 1;
@@ -381,6 +477,15 @@ impl SearchEngine {
         if self.nodes_evaluated % 1000 == 0 && self.should_stop() {
             // Return current evaluation if we need to stop
             return Ok(position.evaluate());
+        }
+
+        // Transposition table lookup for move ordering
+        let mut tt_move: Option<Move> = None;
+        if let Some(ref mut tt) = self.transposition_table {
+            if let Some(entry) = tt.probe(position.hash(), depth) {
+                // Use stored move for move ordering (early returns disabled for safety)
+                tt_move = entry.best_move;
+            }
         }
 
         // Base case: reached depth limit or terminal position
@@ -401,9 +506,13 @@ impl SearchEngine {
             }
         }
 
-        // Order moves for better pruning
+        // Order moves for better pruning, prioritizing TT move
         let mut ordered_moves = legal_moves;
-        self.order_moves(&mut ordered_moves);
+        self.order_moves_with_tt(&mut ordered_moves, tt_move);
+
+        let original_alpha = alpha;
+        let mut best_move: Option<Move> = None;
+        let final_eval: i32;
 
         if maximizing {
             let mut max_eval = i32::MIN;
@@ -416,7 +525,10 @@ impl SearchEngine {
                 let mut search_position = position.clone();
                 if search_position.apply_move_for_search(mv).is_ok() {
                     let eval = self.alpha_beta(&search_position, depth - 1, alpha, beta, false)?;
-                    max_eval = max_eval.max(eval);
+                    if eval > max_eval {
+                        max_eval = eval;
+                        best_move = Some(mv);
+                    }
                     alpha = alpha.max(eval);
 
                     // Alpha-beta pruning
@@ -426,10 +538,9 @@ impl SearchEngine {
                     }
                 }
             }
-            Ok(max_eval)
+            final_eval = max_eval;
         } else {
             let mut min_eval = i32::MAX;
-            let mut beta = beta;
             for &mv in &ordered_moves {
                 // Early time check for each move
                 if self.should_stop() {
@@ -439,7 +550,10 @@ impl SearchEngine {
                 let mut search_position = position.clone();
                 if search_position.apply_move_for_search(mv).is_ok() {
                     let eval = self.alpha_beta(&search_position, depth - 1, alpha, beta, true)?;
-                    min_eval = min_eval.min(eval);
+                    if eval < min_eval {
+                        min_eval = eval;
+                        best_move = Some(mv);
+                    }
                     beta = beta.min(eval);
 
                     // Alpha-beta pruning
@@ -449,8 +563,23 @@ impl SearchEngine {
                     }
                 }
             }
-            Ok(min_eval)
+            final_eval = min_eval;
         }
+
+        // Store in transposition table
+        if let Some(ref mut tt) = self.transposition_table {
+            let node_type = if final_eval >= beta {
+                NodeType::LowerBound  // Failed high (alpha cutoff) - actual score >= beta
+            } else if final_eval <= original_alpha {
+                NodeType::UpperBound  // Failed low (beta cutoff) - actual score <= alpha
+            } else {
+                NodeType::Exact       // Exact score within alpha-beta window
+            };
+            
+            tt.store(position.hash(), final_eval, depth, best_move, node_type);
+        }
+
+        Ok(final_eval)
     }
 }
 
@@ -750,6 +879,126 @@ mod tests {
         // Each iteration should improve move ordering for the next
         assert!(result.nodes_searched > 0, "Should search nodes");
         assert!(result.time_ms > 0, "Should take some time");
+    }
+
+    #[test]
+    fn test_transposition_table_performance_benefits() {
+        let mut engine_without_tt = SearchEngine::new();
+        let mut engine_with_tt = SearchEngine::with_transposition_table(32); // 32MB table
+        
+        engine_without_tt.set_max_depth(4);
+        engine_with_tt.set_max_depth(4);
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // Search without transposition table
+        let result_without_tt = engine_without_tt
+            .find_best_move(&position)
+            .expect("Search without TT should succeed");
+
+        // Search with transposition table
+        let result_with_tt = engine_with_tt
+            .find_best_move(&position)
+            .expect("Search with TT should succeed");
+
+        // Both searches should find the same evaluation (move ordering only)
+        assert_eq!(
+            result_without_tt.evaluation, result_with_tt.evaluation,
+            "TT should not change evaluation (move ordering only)"
+        );
+
+        // Transposition table should reduce nodes searched via better move ordering
+        assert!(
+            result_with_tt.nodes_searched <= result_without_tt.nodes_searched,
+            "TT should reduce or maintain node count: {} vs {}",
+            result_with_tt.nodes_searched,
+            result_without_tt.nodes_searched
+        );
+
+        // Verify TT statistics are populated
+        assert!(result_with_tt.tt_hit_rate >= 0.0, "TT hit rate should be valid");
+        assert!(result_with_tt.tt_stores > 0, "TT should store entries");
+
+        // Calculate performance improvement
+        let improvement_ratio = result_without_tt.nodes_searched as f64 / result_with_tt.nodes_searched as f64;
+        
+        println!("Search without TT: {} nodes in {}ms", 
+                result_without_tt.nodes_searched, result_without_tt.time_ms);
+        println!("Search with TT: {} nodes in {}ms (hit rate: {:.1}%) - {:.1}x improvement", 
+                result_with_tt.nodes_searched, result_with_tt.time_ms,
+                result_with_tt.tt_hit_rate * 100.0, improvement_ratio);
+
+        // Should get at least some improvement from better move ordering
+        assert!(improvement_ratio >= 1.0, "TT should provide performance benefit");
+    }
+
+    #[test]
+    fn test_transposition_table_performance_improvement() {
+        let mut engine = SearchEngine::with_transposition_table(16); // 16MB table
+        engine.set_max_depth(5);
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // First search to populate transposition table
+        let result1 = engine
+            .find_best_move(&position)
+            .expect("First search should succeed");
+
+        // Second search should benefit from populated table
+        let result2 = engine
+            .find_best_move(&position)
+            .expect("Second search should succeed");
+
+        // Second search should have better hit rate and potentially fewer nodes
+        assert!(
+            result2.tt_hit_rate > result1.tt_hit_rate,
+            "Second search should have higher hit rate: {} vs {}",
+            result2.tt_hit_rate,
+            result1.tt_hit_rate
+        );
+
+        // Both should find the same move
+        assert_eq!(
+            result1.best_move, result2.best_move,
+            "Both searches should find the same move"
+        );
+
+        println!("First search: {} nodes, {:.1}% hit rate", 
+                result1.nodes_searched, result1.tt_hit_rate * 100.0);
+        println!("Second search: {} nodes, {:.1}% hit rate", 
+                result2.nodes_searched, result2.tt_hit_rate * 100.0);
+    }
+
+    #[test] 
+    fn test_transposition_table_shallow_search() {
+        // Test with very shallow search to debug
+        let mut engine_baseline = SearchEngine::new();
+        let mut engine_with_tt = SearchEngine::with_transposition_table(1);
+        
+        engine_baseline.set_max_depth(3);
+        engine_with_tt.set_max_depth(3);
+
+        let position = Position::starting_position().expect("Starting position should be valid");
+
+        // Both should find the same result
+        let result_baseline = engine_baseline
+            .find_best_move(&position)
+            .expect("Baseline search should succeed");
+        let result_with_tt = engine_with_tt
+            .find_best_move(&position)
+            .expect("TT search should succeed");
+
+        println!("Baseline: move={:?}, eval={}, nodes={}", 
+                result_baseline.best_move, result_baseline.evaluation, result_baseline.nodes_searched);
+        println!("With TT: move={:?}, eval={}, nodes={}, hit_rate={:.1}%", 
+                result_with_tt.best_move, result_with_tt.evaluation, result_with_tt.nodes_searched,
+                result_with_tt.tt_hit_rate * 100.0);
+
+        // With depth 1, both should find similar results
+        // Allow some variation in move choice but evaluation should be close
+        let eval_diff = (result_baseline.evaluation - result_with_tt.evaluation).abs();
+        assert!(eval_diff <= 50, "Evaluations too different: {} vs {}", 
+               result_baseline.evaluation, result_with_tt.evaluation);
     }
 
     #[test]

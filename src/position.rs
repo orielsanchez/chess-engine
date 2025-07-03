@@ -1,5 +1,6 @@
 use crate::board::{Board, BoardError};
 use crate::types::*;
+use crate::transposition::ZOBRIST_HASHER;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,7 +24,7 @@ impl From<BoardError> for PositionError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Position {
     pub board: Board,
     pub side_to_move: Color,
@@ -31,29 +32,48 @@ pub struct Position {
     pub en_passant: Option<Square>,
     pub halfmove_clock: u8,
     pub fullmove_number: u16,
+    pub zobrist_hash: u64,
+}
+
+impl PartialEq for Position {
+    fn eq(&self, other: &Self) -> bool {
+        self.board == other.board
+            && self.side_to_move == other.side_to_move
+            && self.castling_rights == other.castling_rights
+            && self.en_passant == other.en_passant
+            && self.halfmove_clock == other.halfmove_clock
+            && self.fullmove_number == other.fullmove_number
+        // Explicitly exclude zobrist_hash - it's derived from other fields
+    }
 }
 
 impl Position {
     pub fn new() -> Self {
-        Self {
+        let mut position = Self {
             board: Board::new(),
             side_to_move: Color::White,
             castling_rights: CastlingRights::new(),
             en_passant: None,
             halfmove_clock: 0,
             fullmove_number: 1,
-        }
+            zobrist_hash: 0, // Temporary
+        };
+        position.zobrist_hash = ZOBRIST_HASHER.compute_hash(&position).unwrap_or(0);
+        position
     }
 
     pub fn starting_position() -> Result<Self, PositionError> {
-        Ok(Self {
+        let mut position = Self {
             board: Board::starting_position()?,
             side_to_move: Color::White,
             castling_rights: CastlingRights::new(),
             en_passant: None,
             halfmove_clock: 0,
             fullmove_number: 1,
-        })
+            zobrist_hash: 0, // Temporary
+        };
+        position.zobrist_hash = ZOBRIST_HASHER.compute_hash(&position).unwrap_or(0);
+        Ok(position)
     }
 
     pub fn piece_at(&self, square: Square) -> Option<Piece> {
@@ -311,6 +331,18 @@ impl Position {
         if self.side_to_move == Color::White {
             self.fullmove_number += 1;
         }
+        // Update zobrist hash for side change
+        self.zobrist_hash = ZOBRIST_HASHER.update_side_to_move(self.zobrist_hash).unwrap_or(self.zobrist_hash);
+    }
+
+    /// Get the current zobrist hash of this position
+    pub fn hash(&self) -> u64 {
+        self.zobrist_hash
+    }
+
+    /// Recompute zobrist hash from scratch (for verification)
+    pub fn recompute_hash(&mut self) {
+        self.zobrist_hash = ZOBRIST_HASHER.compute_hash(self).unwrap_or(0);
     }
 }
 
