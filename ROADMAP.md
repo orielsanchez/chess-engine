@@ -68,7 +68,6 @@
 ## In Progress
 
 ### Currently Working On
-- Add FEN parsing and generation
 - Implement basic move validation
 
 ## Done
@@ -82,6 +81,9 @@
 - Create position structure with game state
 - Complete attack detection system
 - Starting position setup and display
+- Add FEN parsing and generation
+- FEN roundtrip conversion with validation
+- Comprehensive error handling for invalid FEN
 
 ## Testing Strategy
 
