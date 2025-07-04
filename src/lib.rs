@@ -4,6 +4,7 @@ pub mod fen;
 pub mod interactive;
 pub mod movegen;
 pub mod moves;
+pub mod pgn;
 pub mod position;
 pub mod search;
 pub mod transposition;
