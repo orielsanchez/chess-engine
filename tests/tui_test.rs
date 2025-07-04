@@ -74,16 +74,20 @@ fn test_layout_constraints() {
     // Should have two areas: board and command
     assert_eq!(layout.len(), 2);
 
-    // Board area should be larger (left side)
+    // Board area should be larger (top)
     let board_area = layout[0];
     let command_area = layout[1];
 
-    // Board and command areas should have equal width (50/50 split)
-    assert_eq!(board_area.width, command_area.width);
+    // Both areas should have full width
+    assert_eq!(board_area.width, terminal_rect.width);
+    assert_eq!(command_area.width, terminal_rect.width);
 
-    // Both should have full height
-    assert_eq!(board_area.height, terminal_rect.height);
-    assert_eq!(command_area.height, terminal_rect.height);
+    // Board should get 70% of height, command should get 30%
+    let board_ratio = board_area.height as f32 / terminal_rect.height as f32;
+    assert!((0.68..=0.72).contains(&board_ratio));
+    
+    let command_ratio = command_area.height as f32 / terminal_rect.height as f32;
+    assert!((0.28..=0.32).contains(&command_ratio));
 }
 
 #[test]
@@ -180,22 +184,22 @@ fn test_split_pane_layout_proportions() {
         let board_area = layout[0];
         let command_area = layout[1];
 
-        // Board should get approximately 50% of width (equal split)
-        let board_ratio = board_area.width as f32 / width as f32;
+        // Board should get approximately 70% of height
+        let board_ratio = board_area.height as f32 / height as f32;
         assert!(
-            (0.49..=0.51).contains(&board_ratio),
-            "Board ratio {} not in range 0.49-0.51 for size {}x{}",
+            (0.68..=0.72).contains(&board_ratio),
+            "Board ratio {} not in range 0.68-0.72 for size {}x{}",
             board_ratio,
             width,
             height
         );
 
-        // Areas should not overlap
-        assert!(board_area.x + board_area.width <= command_area.x);
+        // Areas should not overlap vertically
+        assert!(board_area.y + board_area.height <= command_area.y);
 
-        // Areas should cover full height
-        assert_eq!(board_area.height, height);
-        assert_eq!(command_area.height, height);
+        // Areas should cover full width
+        assert_eq!(board_area.width, width);
+        assert_eq!(command_area.width, width);
     }
 }
 

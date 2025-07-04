@@ -47,13 +47,14 @@ fn run_app<B: ratatui::backend::Backend>(
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Char('t') => {
-                        // Toggle between command and board mode
-                        match app.state() {
-                            TuiState::Command => app.set_state(TuiState::Board),
-                            TuiState::Board => app.set_state(TuiState::Command),
-                            TuiState::Menu => app.set_state(TuiState::Command),
-                            TuiState::GamePlay => app.set_state(TuiState::Command),
-                            TuiState::PuzzleSolving => app.set_state(TuiState::Command),
+                        // Toggle between command and board mode only if command buffer is empty
+                        if matches!(app.state(), TuiState::Command) && app.command_buffer().is_empty() {
+                            app.set_state(TuiState::Board);
+                        } else if matches!(app.state(), TuiState::Board | TuiState::Menu | TuiState::GamePlay | TuiState::PuzzleSolving) {
+                            app.set_state(TuiState::Command);
+                        } else if matches!(app.state(), TuiState::Command) {
+                            // In command mode with text in buffer - add 't' to buffer
+                            app.add_char('t');
                         }
                     }
                     KeyCode::Esc => {
@@ -66,26 +67,36 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char('1') => {
                         if matches!(app.state(), TuiState::Menu) {
                             app.handle_menu_quick_game();
+                        } else if matches!(app.state(), TuiState::Command) {
+                            app.add_char('1');
                         }
                     }
                     KeyCode::Char('2') => {
                         if matches!(app.state(), TuiState::Menu) {
                             app.handle_menu_puzzle();
+                        } else if matches!(app.state(), TuiState::Command) {
+                            app.add_char('2');
                         }
                     }
                     KeyCode::Char('3') => {
                         if matches!(app.state(), TuiState::Menu) {
                             app.handle_menu_analysis();
+                        } else if matches!(app.state(), TuiState::Command) {
+                            app.add_char('3');
                         }
                     }
                     KeyCode::Char('4') => {
                         if matches!(app.state(), TuiState::Menu) {
                             app.handle_menu_help();
+                        } else if matches!(app.state(), TuiState::Command) {
+                            app.add_char('4');
                         }
                     }
                     KeyCode::Char('5') => {
                         if matches!(app.state(), TuiState::Menu) && app.handle_menu_quit() {
                             return Ok(());
+                        } else if matches!(app.state(), TuiState::Command) {
+                            app.add_char('5');
                         }
                     }
                     KeyCode::Enter => {

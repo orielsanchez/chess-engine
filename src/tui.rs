@@ -630,10 +630,10 @@ impl TuiApp {
         match mode {
             LayoutMode::TwoPanelClassic => {
                 Layout::default()
-                    .direction(Direction::Horizontal)
+                    .direction(Direction::Vertical)
                     .constraints([
-                        Constraint::Percentage(50), // Board area
-                        Constraint::Percentage(50), // Command area
+                        Constraint::Percentage(70), // Board area (top)
+                        Constraint::Percentage(30), // Command area (bottom)
                     ])
                     .split(area)
                     .to_vec()
