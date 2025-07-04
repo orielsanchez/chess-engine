@@ -65,6 +65,31 @@ fn run_app<B: ratatui::backend::Backend>(
                             app.remove_char();
                         }
                     }
+                    KeyCode::Tab => {
+                        if matches!(app.state(), TuiState::Command) {
+                            app.handle_tab_completion();
+                        }
+                    }
+                    KeyCode::Up => {
+                        if matches!(app.state(), TuiState::Command) {
+                            app.handle_history_up();
+                        }
+                    }
+                    KeyCode::Down => {
+                        if matches!(app.state(), TuiState::Command) {
+                            app.handle_history_down();
+                        }
+                    }
+                    KeyCode::Left => {
+                        if matches!(app.state(), TuiState::Command) {
+                            app.move_cursor_left();
+                        }
+                    }
+                    KeyCode::Right => {
+                        if matches!(app.state(), TuiState::Command) {
+                            app.move_cursor_right();
+                        }
+                    }
                     KeyCode::Char(c) => {
                         if matches!(app.state(), TuiState::Command) {
                             app.add_char(c);
