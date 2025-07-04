@@ -46,17 +46,6 @@ fn run_app<B: ratatui::backend::Backend>(
             if key.kind == KeyEventKind::Press {
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('t') => {
-                        // Toggle between command and board mode only if command buffer is empty
-                        if matches!(app.state(), TuiState::Command) && app.command_buffer().is_empty() {
-                            app.set_state(TuiState::Board);
-                        } else if matches!(app.state(), TuiState::Board | TuiState::Menu | TuiState::GamePlay | TuiState::PuzzleSolving) {
-                            app.set_state(TuiState::Command);
-                        } else if matches!(app.state(), TuiState::Command) {
-                            // In command mode with text in buffer - add 't' to buffer
-                            app.add_char('t');
-                        }
-                    }
                     KeyCode::Esc => {
                         // Toggle menu - open if not in menu, close if in menu
                         match app.state() {

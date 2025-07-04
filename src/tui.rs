@@ -605,7 +605,29 @@ impl TuiApp {
                     })
                 }
             }
-            // For non-Phase 4 commands, delegate to InteractiveEngine
+            // Handle Move commands with TUI game state
+            Move { algebraic_move } => {
+                if let Ok(chess_move) = crate::moves::Move::from_algebraic(&algebraic_move) {
+                    // First delegate to engine to handle the move on the board
+                    let engine_response = self.engine.handle_command(Move { algebraic_move: algebraic_move.clone() })?;
+                    
+                    // If the move was successful, update TUI game state (clock, engine moves)
+                    if let InteractiveResponse::MoveResult { success: true, .. } = &engine_response {
+                        if let Err(e) = self.make_player_move(chess_move) {
+                            // If TUI game state update fails, we should handle it gracefully
+                            self.last_response = Some(format!("Move executed but game state error: {}", e));
+                        }
+                    }
+                    
+                    Ok(engine_response)
+                } else {
+                    Ok(InteractiveResponse::MoveResult {
+                        success: false,
+                        resulting_fen: self.position().to_fen(),
+                    })
+                }
+            }
+            // For other non-Phase 4 commands, delegate to InteractiveEngine
             _ => self.engine.handle_command(command),
         }
     }
