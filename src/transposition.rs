@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::LazyLock;
 
 /// Global Zobrist hasher instance for consistent hashing
-pub static ZOBRIST_HASHER: LazyLock<ZobristHasher> = LazyLock::new(|| ZobristHasher::new());
+pub static ZOBRIST_HASHER: LazyLock<ZobristHasher> = LazyLock::new(ZobristHasher::new);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ZobristError {
@@ -390,8 +390,8 @@ impl TranspositionTable {
         // For different positions, only replace if deeper search or entry is old
         let should_replace = current.hash == 0
             || current.hash == hash
-            || (current.hash != hash
-                && (depth >= current.depth || current.age < self.generation.saturating_sub(2)));
+            || depth >= current.depth
+            || current.age < self.generation.saturating_sub(2);
 
         if should_replace {
             self.entries[index] = TTEntry {

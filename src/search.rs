@@ -702,11 +702,6 @@ impl SearchEngine {
         2
     }
 
-    /// Order moves for better alpha-beta pruning efficiency (fallback method)
-    fn order_moves(&self, moves: &mut [Move]) {
-        self.order_moves_with_pv(moves);
-    }
-
     /// Order moves with transposition table move priority and killer moves
     fn order_moves_with_tt(&self, moves: &mut [Move], tt_move: Option<Move>, depth: usize) {
         moves.sort_by(|a, b| {
@@ -774,31 +769,6 @@ impl SearchEngine {
 
         self.killer_moves.primary[depth] == Some(mv)
             || self.killer_moves.secondary[depth] == Some(mv)
-    }
-
-    /// Order moves with killer moves included
-    fn order_moves_with_killers(&self, moves: &mut [Move], depth: usize) {
-        moves.sort_by(|a, b| {
-            let a_priority = self.get_move_priority_with_killers(*a, depth);
-            let b_priority = self.get_move_priority_with_killers(*b, depth);
-            a_priority.cmp(&b_priority)
-        });
-    }
-
-    /// Get priority for move ordering including killer moves (lower = higher priority)
-    fn get_move_priority_with_killers(&self, mv: Move, depth: usize) -> u8 {
-        // Captures first
-        if mv.move_type.is_capture() || mv.move_type.is_promotion() {
-            return 0;
-        }
-
-        // Killer moves next
-        if self.is_killer_move(mv, depth) {
-            return 1;
-        }
-
-        // Regular quiet moves last
-        2
     }
 
     /// Alpha-beta pruning search implementation
@@ -1143,7 +1113,7 @@ mod tests {
             ),
         ];
 
-        engine.order_moves(&mut moves);
+        engine.order_moves_with_pv(&mut moves);
 
         // Captures should come first
         assert!(
@@ -1186,7 +1156,7 @@ mod tests {
         engine.store_killer_move(killer_move, 2);
 
         let mut moves = vec![regular_quiet, killer_move, capture_move];
-        engine.order_moves_with_killers(&mut moves, 2);
+        engine.order_moves_with_tt(&mut moves, None, 2);
 
         // Order should be: capture, killer, regular quiet
         assert!(moves[0].move_type.is_capture(), "Capture should be first");
