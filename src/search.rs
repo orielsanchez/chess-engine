@@ -79,6 +79,8 @@ pub struct SearchResult {
     pub aspiration_researches: u64,
     /// Current aspiration window size
     pub aspiration_window_size: u32,
+    /// Principal variation - sequence of best moves
+    pub principal_variation: Vec<Move>,
 }
 
 impl SearchResult {
@@ -99,6 +101,7 @@ impl SearchResult {
             aspiration_fails: 0,
             aspiration_researches: 0,
             aspiration_window_size: 0,
+            principal_variation: vec![best_move],
         }
     }
 
@@ -121,6 +124,7 @@ impl SearchResult {
             aspiration_fails: data.aspiration_fails,
             aspiration_researches: data.aspiration_researches,
             aspiration_window_size: data.aspiration_window_size,
+            principal_variation: data.principal_variation,
         }
     }
 }
@@ -142,6 +146,7 @@ pub struct IterativeSearchData {
     pub aspiration_fails: u64,
     pub aspiration_researches: u64,
     pub aspiration_window_size: u32,
+    pub principal_variation: Vec<Move>,
 }
 
 /// Information needed to undo a move for search traversal
@@ -380,6 +385,7 @@ impl SearchEngine {
             aspiration_fails: 0,
             aspiration_researches: 0,
             aspiration_window_size: 0,
+            principal_variation: vec![best_move],
         }))
     }
 
@@ -616,6 +622,7 @@ impl SearchEngine {
             aspiration_fails: self.aspiration_fails,
             aspiration_researches: self.aspiration_researches,
             aspiration_window_size: DEFAULT_ASPIRATION_WINDOW as u32,
+            principal_variation: vec![best_move],
         }))
     }
 

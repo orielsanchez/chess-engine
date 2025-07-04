@@ -36,6 +36,7 @@ Complete workflow to update roadmap, validate quality, and commit changes.
 ### **4. Final Validation & Commit**
 - Final quality check with hooks
 - Create commit with proper attribution
+- **REMINDER: Check for Co-Authored-By lines in commit messages if includeCoAuthoredBy is set to false**
 - Verify commit succeeded
 - Optionally update mastery progression
 
@@ -60,6 +61,11 @@ Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
+
+**⚠️ Co-Author Attribution Note:**
+- Check `.claude/settings.local.json` for `includeCoAuthoredBy` setting
+- If set to `false`, manually remove Co-Authored-By lines from commit messages
+- Respect user preference for attribution in all commits
 
 ## Integration with Development Workflow
 
