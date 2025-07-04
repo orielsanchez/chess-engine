@@ -51,8 +51,45 @@ fn run_app<B: ratatui::backend::Backend>(
                         match app.state() {
                             TuiState::Command => app.set_state(TuiState::Board),
                             TuiState::Board => app.set_state(TuiState::Command),
+                            TuiState::Menu => app.set_state(TuiState::Command),
                             TuiState::GamePlay => app.set_state(TuiState::Command),
                             TuiState::PuzzleSolving => app.set_state(TuiState::Command),
+                        }
+                    }
+                    KeyCode::Char('m') => {
+                        // Open menu if not already in menu
+                        if !matches!(app.state(), TuiState::Menu) {
+                            app.set_state(TuiState::Menu);
+                        }
+                    }
+                    KeyCode::Char('1') => {
+                        if matches!(app.state(), TuiState::Menu) {
+                            app.handle_menu_quick_game();
+                        }
+                    }
+                    KeyCode::Char('2') => {
+                        if matches!(app.state(), TuiState::Menu) {
+                            app.handle_menu_puzzle();
+                        }
+                    }
+                    KeyCode::Char('3') => {
+                        if matches!(app.state(), TuiState::Menu) {
+                            app.handle_menu_analysis();
+                        }
+                    }
+                    KeyCode::Char('4') => {
+                        if matches!(app.state(), TuiState::Menu) {
+                            app.handle_menu_help();
+                        }
+                    }
+                    KeyCode::Char('5') => {
+                        if matches!(app.state(), TuiState::Menu) && app.handle_menu_quit() {
+                            return Ok(());
+                        }
+                    }
+                    KeyCode::Esc => {
+                        if matches!(app.state(), TuiState::Menu) {
+                            app.set_state(TuiState::Command);
                         }
                     }
                     KeyCode::Enter => {

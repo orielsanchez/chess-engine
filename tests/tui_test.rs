@@ -78,8 +78,8 @@ fn test_layout_constraints() {
     let board_area = layout[0];
     let command_area = layout[1];
 
-    // Board should take most of the width
-    assert!(board_area.width > command_area.width);
+    // Board and command areas should have equal width (50/50 split)
+    assert_eq!(board_area.width, command_area.width);
 
     // Both should have full height
     assert_eq!(board_area.height, terminal_rect.height);
@@ -180,11 +180,11 @@ fn test_split_pane_layout_proportions() {
         let board_area = layout[0];
         let command_area = layout[1];
 
-        // Board should get approximately 60-70% of width
+        // Board should get approximately 50% of width (equal split)
         let board_ratio = board_area.width as f32 / width as f32;
         assert!(
-            (0.6..=0.7).contains(&board_ratio),
-            "Board ratio {} not in range 0.6-0.7 for size {}x{}",
+            (0.49..=0.51).contains(&board_ratio),
+            "Board ratio {} not in range 0.49-0.51 for size {}x{}",
             board_ratio,
             width,
             height

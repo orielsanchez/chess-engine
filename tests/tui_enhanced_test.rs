@@ -1,4 +1,6 @@
-use chess_engine::tui::{CommandCompletion, CommandHistory, TuiApp};
+use chess_engine::tui::{
+    ClockWidget, CommandCompletion, CommandHistory, MenuWidget, TuiApp, TuiState,
+};
 
 #[cfg(test)]
 mod tui_enhanced_tests {
@@ -16,7 +18,7 @@ mod tui_enhanced_tests {
         let completions = completion.complete_command("l");
         assert!(completions.contains(&"legal".to_string()));
 
-        let completions = completion.complete_command("m");
+        let completions = completion.complete_command("mov");
         assert!(completions.contains(&"move".to_string()));
 
         let completions = completion.complete_command("h");
@@ -104,7 +106,7 @@ mod tui_enhanced_tests {
         // Test alias expansion
         assert_eq!(completion.expand_alias("a"), "analyze");
         assert_eq!(completion.expand_alias("l"), "legal");
-        assert_eq!(completion.expand_alias("m e4"), "move e4");
+        assert_eq!(completion.expand_alias("p fen"), "position fen");
         assert_eq!(completion.expand_alias("analyze"), "analyze"); // No change for full command
     }
 
@@ -160,5 +162,244 @@ mod tui_enhanced_tests {
         // Test insertion at cursor position
         app.insert_char_at_cursor('d');
         assert_eq!(app.command_buffer(), "analyzde");
+    }
+
+    #[test]
+    fn test_clock_widget_no_game() {
+        let widget = ClockWidget::new(None);
+        let content = widget.content();
+        assert_eq!(content, "No active game");
+    }
+
+    #[test]
+    fn test_clock_widget_with_game() {
+        // 5 minutes = 300,000 ms for both players
+        let clock_data = Some((300000, 300000));
+        let widget = ClockWidget::new(clock_data);
+        let content = widget.content();
+        assert_eq!(content, "W: 5:00 | B: 5:00");
+    }
+
+    #[test]
+    fn test_clock_widget_different_times() {
+        // White: 4:23 = 263,000 ms, Black: 5:17 = 317,000 ms
+        let clock_data = Some((263000, 317000));
+        let widget = ClockWidget::new(clock_data);
+        let content = widget.content();
+        assert_eq!(content, "W: 4:23 | B: 5:17");
+    }
+
+    #[test]
+    fn test_clock_widget_under_minute() {
+        // White: 0:45 = 45,000 ms, Black: 0:03 = 3,000 ms
+        let clock_data = Some((45000, 3000));
+        let widget = ClockWidget::new(clock_data);
+        let content = widget.content();
+        assert_eq!(content, "W: 0:45 | B: 0:03");
+    }
+
+    #[test]
+    fn test_clock_widget_zero_time() {
+        // Both players at 0:00
+        let clock_data = Some((0, 0));
+        let widget = ClockWidget::new(clock_data);
+        let content = widget.content();
+        assert_eq!(content, "W: 0:00 | B: 0:00");
+    }
+
+    #[test]
+    fn test_clock_widget_has_title() {
+        let widget = ClockWidget::new(None);
+        assert_eq!(widget.title(), None); // Clock widget doesn't need a title
+    }
+
+    #[test]
+    fn test_clock_widget_no_borders() {
+        let widget = ClockWidget::new(None);
+        assert!(!widget.has_borders()); // Clock widget should not have borders
+    }
+
+    #[test]
+    fn test_clock_integration_with_game_start() {
+        let mut app = TuiApp::new().unwrap();
+
+        // Initially no clock should be active
+        let clock_widget = app.create_clock_widget();
+        assert_eq!(clock_widget.content(), "No active game");
+
+        // Start an engine game
+        app.start_engine_game(chess_engine::types::Color::White, 5);
+
+        // Clock should now be active with 5:00 for both players
+        let clock_widget = app.create_clock_widget();
+        assert_eq!(clock_widget.content(), "W: 5:00 | B: 5:00");
+
+        // Verify game clock is set in game state
+        assert!(app.get_game_clock().is_some());
+        let (white_time, black_time) = app.get_game_clock().unwrap();
+        assert_eq!(white_time, 300000); // 5 minutes in milliseconds
+        assert_eq!(black_time, 300000);
+    }
+
+    #[test]
+    fn test_menu_widget_creation() {
+        let widget = MenuWidget::new();
+        assert!(widget.title().is_some());
+        assert!(widget.has_borders());
+    }
+
+    #[test]
+    fn test_menu_widget_content() {
+        let widget = MenuWidget::new();
+        let content = widget.content();
+
+        // Menu should contain key options
+        assert!(content.contains("[1]"));
+        assert!(content.contains("Quick Game"));
+        assert!(content.contains("[2]"));
+        assert!(content.contains("Puzzle"));
+        assert!(content.contains("[3]"));
+        assert!(content.contains("Analysis"));
+        assert!(content.contains("ESC"));
+    }
+
+    #[test]
+    fn test_tui_state_menu_transitions() {
+        let mut app = TuiApp::new().unwrap();
+
+        // Should start in Command state
+        assert_eq!(app.get_state(), TuiState::Command);
+
+        // Can transition to Menu state
+        app.set_tui_state(TuiState::Menu);
+        assert_eq!(app.get_state(), TuiState::Menu);
+
+        // Can transition back to Command state
+        app.set_tui_state(TuiState::Command);
+        assert_eq!(app.get_state(), TuiState::Command);
+    }
+
+    #[test]
+    fn test_menu_quick_game_action() {
+        let mut app = TuiApp::new().unwrap();
+
+        // Initially no game active
+        assert!(app.get_game_clock().is_none());
+
+        // Simulate menu quick game action
+        app.handle_menu_quick_game();
+
+        // Should start engine game and transition to GamePlay state
+        assert!(app.get_game_clock().is_some());
+        assert_eq!(app.get_state(), TuiState::GamePlay);
+
+        // Should be playing as white against engine
+        match app.get_game_mode() {
+            chess_engine::tui::GameMode::PlayVsEngine {
+                player_color,
+                difficulty,
+            } => {
+                assert_eq!(player_color, chess_engine::types::Color::White);
+                assert_eq!(difficulty, 5); // Default difficulty
+            }
+            _ => panic!("Expected PlayVsEngine mode"),
+        }
+    }
+
+    #[test]
+    fn test_full_user_workflow_simulation() {
+        let mut app = TuiApp::new().unwrap();
+
+        // 1. Initial state - should be Command mode, no clock
+        assert_eq!(app.state(), &TuiState::Command);
+        assert!(app.get_game_clock().is_none());
+        let clock_widget = app.create_clock_widget();
+        assert_eq!(clock_widget.content(), "No active game");
+
+        // 2. Open menu with 'M' key simulation
+        app.set_state(TuiState::Menu);
+        assert_eq!(app.state(), &TuiState::Menu);
+
+        // 3. Menu should be visible and have correct content
+        let menu_widget = app.create_menu_widget();
+        let menu_content = menu_widget.content();
+        assert!(menu_content.contains("[1] Quick Game"));
+        assert!(menu_content.contains("Press number key or ESC"));
+
+        // 4. Select option 1 (Quick Game)
+        app.handle_menu_quick_game();
+
+        // 5. Should now be in GamePlay state with active clock
+        assert_eq!(app.state(), &TuiState::GamePlay);
+        assert!(app.get_game_clock().is_some());
+
+        // 6. Clock should now show game time
+        let clock_widget = app.create_clock_widget();
+        assert_eq!(clock_widget.content(), "W: 5:00 | B: 5:00");
+
+        // 7. Verify complete game setup
+        match app.get_game_mode() {
+            chess_engine::tui::GameMode::PlayVsEngine {
+                player_color,
+                difficulty,
+            } => {
+                assert_eq!(player_color, chess_engine::types::Color::White);
+                assert_eq!(difficulty, 5);
+            }
+            _ => panic!("Expected PlayVsEngine mode after quick game"),
+        }
+    }
+
+    #[test]
+    fn test_direct_move_input_detection() {
+        let app = TuiApp::new().unwrap();
+
+        // Coordinate notation should be detected as moves
+        assert!(app.is_move_input("e2e4"));
+        assert!(app.is_move_input("g1f3"));
+        assert!(app.is_move_input("a1h8"));
+
+        // Algebraic notation should be detected as moves
+        assert!(app.is_move_input("e4"));
+        assert!(app.is_move_input("Nf3"));
+        assert!(app.is_move_input("Qh5"));
+        assert!(app.is_move_input("Bb5"));
+
+        // Castling should be detected as moves
+        assert!(app.is_move_input("O-O"));
+        assert!(app.is_move_input("O-O-O"));
+        assert!(app.is_move_input("0-0"));
+        assert!(app.is_move_input("0-0-0"));
+
+        // Commands should NOT be detected as moves
+        assert!(!app.is_move_input("help"));
+        assert!(!app.is_move_input("analyze"));
+        assert!(!app.is_move_input("legal"));
+        assert!(!app.is_move_input("position"));
+        assert!(!app.is_move_input("move e4")); // Full command
+
+        // Empty or invalid should not be moves
+        assert!(!app.is_move_input(""));
+        assert!(!app.is_move_input("   "));
+        assert!(!app.is_move_input("xyz"));
+        assert!(!app.is_move_input("123"));
+    }
+
+    #[test]
+    fn test_menu_quit_option() {
+        let widget = MenuWidget::new();
+        let content = widget.content();
+
+        // Menu should contain quit option
+        assert!(content.contains("[5]"));
+        assert!(content.contains("Quit"));
+    }
+
+    #[test]
+    fn test_menu_quit_handler() {
+        let mut app = TuiApp::new().unwrap();
+
+        // Quit handler should return true to signal quit
+        assert!(app.handle_menu_quit());
     }
 }

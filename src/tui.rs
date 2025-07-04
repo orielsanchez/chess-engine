@@ -16,6 +16,7 @@ use std::time::Instant;
 pub enum TuiState {
     Command,
     Board,
+    Menu,
     GamePlay,
     PuzzleSolving,
 }
@@ -93,7 +94,6 @@ impl CommandCompletion {
             aliases: vec![
                 ("a".to_string(), "analyze".to_string()),
                 ("l".to_string(), "legal".to_string()),
-                ("m".to_string(), "move".to_string()),
                 ("p".to_string(), "position".to_string()),
                 ("u".to_string(), "undo".to_string()),
                 ("h".to_string(), "help".to_string()),
@@ -416,6 +416,61 @@ impl TuiApp {
         Move::from_algebraic(input).map_err(|e| e.to_string())
     }
 
+    pub fn is_move_input(&self, input: &str) -> bool {
+        // Check if input looks like a chess move
+        let trimmed = input.trim();
+
+        // Common move patterns:
+        // - Coordinate notation: e2e4, g1f3, e1g1 (castling)
+        // - Algebraic notation: e4, Nf3, Qh5, O-O, O-O-O
+        // - With check/checkmate: e4+, Qh5#
+
+        if trimmed.is_empty() {
+            return false;
+        }
+
+        // Coordinate notation (4 chars): e2e4, a1h8, etc.
+        if trimmed.len() == 4 {
+            let chars: Vec<char> = trimmed.chars().collect();
+            return chars[0].is_ascii_lowercase()
+                && chars[0] >= 'a'
+                && chars[0] <= 'h'
+                && chars[1].is_ascii_digit()
+                && chars[1] >= '1'
+                && chars[1] <= '8'
+                && chars[2].is_ascii_lowercase()
+                && chars[2] >= 'a'
+                && chars[2] <= 'h'
+                && chars[3].is_ascii_digit()
+                && chars[3] >= '1'
+                && chars[3] <= '8';
+        }
+
+        // Castling
+        if trimmed == "O-O" || trimmed == "O-O-O" || trimmed == "0-0" || trimmed == "0-0-0" {
+            return true;
+        }
+
+        // Algebraic notation patterns
+        if trimmed.len() >= 2 && trimmed.len() <= 6 {
+            let clean = trimmed.trim_end_matches(&['+', '#'][..]);
+
+            // Simple pawn moves: e4, d5, etc.
+            if clean.len() == 2 {
+                let chars: Vec<char> = clean.chars().collect();
+                return chars[0] >= 'a' && chars[0] <= 'h' && chars[1] >= '1' && chars[1] <= '8';
+            }
+
+            // Piece moves: Nf3, Qh5, Bb5, etc.
+            if clean.len() >= 3 {
+                let first_char = clean.chars().next().unwrap();
+                return "NBRQK".contains(first_char);
+            }
+        }
+
+        false
+    }
+
     pub fn update_position(&mut self, position: Position) {
         // This is a simplified version - in a real implementation
         // we'd need to update the engine's internal state
@@ -436,7 +491,42 @@ impl TuiApp {
         // Add to history before processing
         self.history.add_command(self.command_buffer.clone());
 
-        // Expand aliases
+        let input = self.command_buffer.trim();
+
+        // First, check if input looks like a move
+        if self.is_move_input(input) {
+            // Try to execute as a move
+            if let Ok(_chess_move) = self.parse_natural_move(input) {
+                // Execute the move command
+                let move_command = format!("move {}", input);
+                let expanded_command = self.completion.expand_alias(&move_command);
+
+                match InteractiveEngine::parse_command(&expanded_command) {
+                    Ok(command) => {
+                        match self.handle_command_with_phase4(command) {
+                            Ok(response) => {
+                                let formatted_response =
+                                    InteractiveEngine::format_response(&response);
+                                self.last_response = Some(formatted_response);
+                                self.clear_command_buffer();
+                                return Ok(());
+                            }
+                            Err(e) => {
+                                // Move failed, fall through to try as regular command
+                                self.last_response = Some(format!("Invalid move: {}", e));
+                                self.clear_command_buffer();
+                                return Err(e);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Move parsing failed, fall through to regular command
+                    }
+                }
+            }
+        }
+
+        // If not a move or move failed, try as regular command
         let expanded_command = self.completion.expand_alias(&self.command_buffer);
 
         let command = InteractiveEngine::parse_command(&expanded_command)?;
@@ -542,8 +632,8 @@ impl TuiApp {
                 Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([
-                        Constraint::Percentage(65), // Board area
-                        Constraint::Percentage(35), // Command area
+                        Constraint::Percentage(50), // Board area
+                        Constraint::Percentage(50), // Command area
                     ])
                     .split(area)
                     .to_vec()
@@ -585,6 +675,10 @@ impl TuiApp {
         CommandWidget::new(&self.command_buffer, self.last_response.as_deref())
     }
 
+    pub fn create_clock_widget(&self) -> ClockWidget {
+        ClockWidget::new(self.game_state.game_clock)
+    }
+
     pub fn create_evaluation_widget<'a>(
         &self,
         search_result: &'a SearchResult,
@@ -608,9 +702,32 @@ impl TuiApp {
         let board_widget = self.create_board_widget(self.position());
         frame.render_widget(board_widget, board_area);
 
-        // Render command area
-        let command_widget = self.create_command_widget();
-        frame.render_widget(command_widget, command_area);
+        // Render command area with clock if game is active
+        if self.game_state.game_clock.is_some() {
+            // Split command area: clock (1 line) + command input (rest)
+            let command_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // Clock area
+                    Constraint::Min(0),    // Command area
+                ])
+                .split(command_area);
+
+            let clock_area = command_layout[0];
+            let cmd_area = command_layout[1];
+
+            // Render clock widget
+            let clock_widget = self.create_clock_widget();
+            frame.render_widget(clock_widget, clock_area);
+
+            // Render command widget
+            let command_widget = self.create_command_widget();
+            frame.render_widget(command_widget, cmd_area);
+        } else {
+            // No active game, just render command widget
+            let command_widget = self.create_command_widget();
+            frame.render_widget(command_widget, command_area);
+        }
 
         // Render analysis area if in three-panel mode and have search results
         if layout.len() > 2 {
@@ -619,6 +736,14 @@ impl TuiApp {
                 let pv_widget = self.create_principal_variation_widget(search_result);
                 frame.render_widget(pv_widget, analysis_area);
             }
+        }
+
+        // Render menu overlay if in Menu state
+        if self.state == TuiState::Menu {
+            // Create a centered popup area
+            let popup_area = self.create_centered_popup(frame.area(), 50, 30);
+            let menu_widget = self.create_menu_widget();
+            frame.render_widget(menu_widget, popup_area);
         }
     }
 
@@ -649,6 +774,10 @@ impl TuiApp {
 
     pub fn set_tui_state(&mut self, state: TuiState) {
         self.state = state;
+    }
+
+    pub fn get_state(&self) -> TuiState {
+        self.state.clone()
     }
 
     // Phase 4: Engine Game Functionality
@@ -861,6 +990,58 @@ impl TuiApp {
 
     fn square_from_string(square_str: &str) -> Square {
         Square::from_algebraic(square_str).unwrap_or(Square::from_index(0).unwrap())
+    }
+
+    // Menu System Methods
+    pub fn create_menu_widget(&self) -> MenuWidget {
+        MenuWidget::new()
+    }
+
+    pub fn handle_menu_quick_game(&mut self) {
+        self.start_engine_game(Color::White, 5); // Default: play as white, difficulty 5
+        self.set_tui_state(TuiState::GamePlay);
+    }
+
+    pub fn handle_menu_puzzle(&mut self) {
+        self.load_puzzle("mate_in_2").unwrap_or_default();
+        self.set_game_mode(GameMode::PuzzleSolving {
+            puzzle_id: "mate_in_2".to_string(),
+        });
+        self.set_tui_state(TuiState::PuzzleSolving);
+    }
+
+    pub fn handle_menu_analysis(&mut self) {
+        self.set_game_mode(GameMode::Analysis);
+        self.set_tui_state(TuiState::Command);
+    }
+
+    pub fn handle_menu_help(&mut self) {
+        self.last_response = Some("Available commands: help, play, puzzle, threats, hint, clock, analyze, legal, move, position, undo".to_string());
+        self.set_tui_state(TuiState::Command);
+    }
+
+    pub fn handle_menu_quit(&mut self) -> bool {
+        true // Signal to quit the application
+    }
+
+    fn create_centered_popup(&self, area: Rect, width_percent: u16, height_percent: u16) -> Rect {
+        let popup_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage((100 - height_percent) / 2),
+                Constraint::Percentage(height_percent),
+                Constraint::Percentage((100 - height_percent) / 2),
+            ])
+            .split(area);
+
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage((100 - width_percent) / 2),
+                Constraint::Percentage(width_percent),
+                Constraint::Percentage((100 - width_percent) / 2),
+            ])
+            .split(popup_layout[1])[1]
     }
 }
 
@@ -1223,4 +1404,100 @@ fn find_common_prefix(strings: &[String]) -> String {
     }
 
     first.chars().take(prefix_len).collect()
+}
+
+pub struct ClockWidget {
+    clock_data: Option<(u64, u64)>,
+}
+
+impl ClockWidget {
+    pub fn new(clock_data: Option<(u64, u64)>) -> Self {
+        Self { clock_data }
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        None
+    }
+
+    pub fn has_borders(&self) -> bool {
+        false
+    }
+
+    pub fn content(&self) -> String {
+        match self.clock_data {
+            Some((white_ms, black_ms)) => {
+                let white_time = Self::format_time(white_ms);
+                let black_time = Self::format_time(black_ms);
+                format!("W: {} | B: {}", white_time, black_time)
+            }
+            None => "No active game".to_string(),
+        }
+    }
+
+    fn format_time(ms: u64) -> String {
+        let total_seconds = ms / 1000;
+        let minutes = total_seconds / 60;
+        let seconds = total_seconds % 60;
+        format!("{}:{:02}", minutes, seconds)
+    }
+}
+
+impl Widget for ClockWidget {
+    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
+        let content = self.content();
+
+        let paragraph = Paragraph::new(content).style(Style::default().fg(RatatuiColor::White));
+
+        paragraph.render(area, buf);
+    }
+}
+
+pub struct MenuWidget;
+
+impl Default for MenuWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MenuWidget {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        Some("Chess Engine")
+    }
+
+    pub fn has_borders(&self) -> bool {
+        true
+    }
+
+    pub fn content(&self) -> String {
+        "Select Game Mode:\n\n\
+            [1] Quick Game (White vs Engine)\n\
+            [2] Puzzle Training\n\
+            [3] Analysis Mode\n\
+            [4] Help\n\
+            [5] Quit\n\n\
+            Press number key or ESC to cancel"
+            .to_string()
+    }
+}
+
+impl Widget for MenuWidget {
+    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
+        let content = self.content();
+
+        let paragraph = Paragraph::new(content)
+            .block(
+                Block::default()
+                    .title("Chess Engine")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(RatatuiColor::White)),
+            )
+            .style(Style::default().fg(RatatuiColor::White));
+
+        paragraph.render(area, buf);
+    }
 }
