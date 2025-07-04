@@ -51,6 +51,8 @@ fn run_app<B: ratatui::backend::Backend>(
                         match app.state() {
                             TuiState::Command => app.set_state(TuiState::Board),
                             TuiState::Board => app.set_state(TuiState::Command),
+                            TuiState::GamePlay => app.set_state(TuiState::Command),
+                            TuiState::PuzzleSolving => app.set_state(TuiState::Command),
                         }
                     }
                     KeyCode::Enter => {
