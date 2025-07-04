@@ -164,6 +164,135 @@ fn test_evaluation_widget_dynamic_content_updates() {
     }
 }
 
+// Phase 3 TDD Tests: Enhanced Evaluation Statistics
+
+#[test]
+fn test_evaluation_widget_search_performance_metrics() {
+    let search_result = create_mock_search_result_with_metrics(150, 12, 25000, 500);
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should display nodes per second calculation (25000 nodes / 500ms = 50000 nps)
+    assert!(content.contains("NPS: 50000"));
+
+    // Should display nodes searched
+    assert!(content.contains("Nodes: 25000"));
+
+    // Should display search time
+    assert!(content.contains("Time: 500ms"));
+}
+
+#[test]
+fn test_evaluation_widget_advantage_indicators() {
+    let test_cases = vec![
+        (25, "slight advantage"),     // +0.25
+        (100, "advantage"),           // +1.00
+        (300, "winning"),             // +3.00
+        (-50, "slight disadvantage"), // -0.50
+        (-200, "disadvantage"),       // -2.00
+        (-500, "losing"),             // -5.00
+        (0, "equal"),                 // 0.00
+    ];
+
+    for (eval_cp, expected_indicator) in test_cases {
+        let search_result = create_mock_search_result(eval_cp, 10);
+        let widget = EvaluationWidget::new(&search_result);
+        let content = widget.content();
+
+        assert!(
+            content.contains(expected_indicator),
+            "Expected '{}' for evaluation {}, but content was: {}",
+            expected_indicator,
+            eval_cp,
+            content
+        );
+    }
+}
+
+#[test]
+fn test_evaluation_widget_transposition_table_statistics() {
+    let search_result = create_mock_search_result(100, 12);
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should display TT hit rate as percentage
+    assert!(content.contains("TT Hit: 85%"));
+
+    // Should display TT hits and stores
+    assert!(content.contains("TT Hits: 8500"));
+    assert!(content.contains("TT Stores: 1500"));
+}
+
+#[test]
+fn test_evaluation_widget_detailed_evaluation_breakdown() {
+    let search_result = create_mock_search_result(150, 12);
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should show detailed evaluation components with actual values, not placeholders
+    assert!(!content.contains("Material: +0.00")); // Should NOT have placeholder values
+    assert!(!content.contains("Position: +0.00"));
+    assert!(!content.contains("Pawns: +0.00"));
+
+    // Should contain realistic evaluation breakdown
+    assert!(content.contains("Material:"));
+    assert!(content.contains("Position:"));
+    assert!(content.contains("Pawns:"));
+
+    // Should show values that add up to total evaluation
+    // This will be implemented to actually calculate the breakdown
+}
+
+#[test]
+fn test_evaluation_widget_aspiration_window_statistics() {
+    let search_result = create_mock_search_result(100, 15);
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should display aspiration window failures and re-searches
+    assert!(content.contains("Asp Fails: 2"));
+    assert!(content.contains("Asp Research: 1"));
+    assert!(content.contains("Asp Window: 50"));
+}
+
+#[test]
+fn test_evaluation_widget_iterative_deepening_progress() {
+    let search_result = create_mock_search_result(200, 15);
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should show iterative deepening progress
+    assert!(content.contains("Iterations: 15"));
+    assert!(content.contains("Target Depth: 15"));
+    assert!(content.contains("Completed: 15"));
+}
+
+#[test]
+fn test_evaluation_widget_time_management_indicators() {
+    let mut search_result = create_mock_search_result(100, 12);
+    search_result.time_limited = true;
+
+    let widget = EvaluationWidget::new(&search_result);
+    let content = widget.content();
+
+    // Should indicate when search was time-limited
+    assert!(content.contains("(time limited)"));
+
+    // Test non-time-limited case
+    let mut search_result2 = create_mock_search_result(100, 12);
+    search_result2.time_limited = false;
+
+    let widget2 = EvaluationWidget::new(&search_result2);
+    let content2 = widget2.content();
+
+    assert!(!content2.contains("(time limited)"));
+}
+
 fn create_mock_search_result(evaluation: i32, depth: u8) -> SearchResult {
     // Create a simple move (e2e4) for testing
     let from = Square::from_index(12).unwrap(); // e2
@@ -183,6 +312,36 @@ fn create_mock_search_result(evaluation: i32, depth: u8) -> SearchResult {
         tt_hit_rate: 0.85,
         tt_hits: 8500,
         tt_stores: 1500,
+        aspiration_fails: 2,
+        aspiration_researches: 1,
+        aspiration_window_size: 50,
+        principal_variation: vec![best_move],
+    }
+}
+
+fn create_mock_search_result_with_metrics(
+    evaluation: i32,
+    depth: u8,
+    nodes: u64,
+    time_ms: u64,
+) -> SearchResult {
+    let from = Square::from_index(12).unwrap(); // e2
+    let to = Square::from_index(28).unwrap(); // e4
+    let best_move = Move::new(from, to, MoveType::Quiet);
+
+    SearchResult {
+        best_move,
+        evaluation,
+        depth,
+        completed_depth: depth,
+        nodes_searched: nodes,
+        nodes_pruned: nodes / 2,
+        time_ms,
+        time_limited: false,
+        iterations_completed: depth,
+        tt_hit_rate: 0.85,
+        tt_hits: (nodes as f64 * 0.85) as u64,
+        tt_stores: nodes / 10,
         aspiration_fails: 2,
         aspiration_researches: 1,
         aspiration_window_size: 50,

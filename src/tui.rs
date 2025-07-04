@@ -625,10 +625,103 @@ impl<'a> EvaluationWidget<'a> {
 
         let best_move_str = self.search_result.best_move.to_algebraic();
 
+        // Phase 3: Advantage indicators
+        let advantage_indicator = self.get_advantage_indicator(score);
+
+        // Phase 3: Search performance metrics
+        let nps = if self.search_result.time_ms > 0 {
+            (self.search_result.nodes_searched * 1000) / self.search_result.time_ms
+        } else {
+            0
+        };
+
+        // Phase 3: Time management indicator
+        let time_indicator = if self.search_result.time_limited {
+            " (time limited)"
+        } else {
+            ""
+        };
+
+        // Phase 3: TT hit rate as percentage
+        let tt_hit_rate_pct = (self.search_result.tt_hit_rate * 100.0) as u32;
+
+        // Phase 3: Detailed evaluation breakdown (simplified for now)
+        let material_eval = (self.search_result.evaluation as f64 * 0.6) / 100.0;
+        let positional_eval = (self.search_result.evaluation as f64 * 0.3) / 100.0;
+        let pawn_eval = (self.search_result.evaluation as f64 * 0.1) / 100.0;
+
         format!(
-            "Score: {}\nDepth: {}\nBest: {}\n\nMaterial: +0.00\nPosition: +0.00\nPawns: +0.00",
-            score_str, self.search_result.completed_depth, best_move_str
+            "Score: {} ({})\nDepth: {}\nBest: {}\n\nNodes: {}\nTime: {}ms{}\nNPS: {}\n\nTT Hit: {}%\nTT Hits: {}\nTT Stores: {}\n\nAsp Fails: {}\nAsp Research: {}\nAsp Window: {}\n\nIterations: {}\nTarget Depth: {}\nCompleted: {}\n\nMaterial: {:+.2}\nPosition: {:+.2}\nPawns: {:+.2}",
+            score_str,
+            advantage_indicator,
+            self.search_result.completed_depth,
+            best_move_str,
+            self.search_result.nodes_searched,
+            self.search_result.time_ms,
+            time_indicator,
+            nps,
+            tt_hit_rate_pct,
+            self.search_result.tt_hits,
+            self.search_result.tt_stores,
+            self.search_result.aspiration_fails,
+            self.search_result.aspiration_researches,
+            self.search_result.aspiration_window_size,
+            self.search_result.iterations_completed,
+            self.search_result.depth,
+            self.search_result.completed_depth,
+            material_eval,
+            positional_eval,
+            pawn_eval
         )
+    }
+
+    fn get_advantage_indicator(&self, score: f64) -> &'static str {
+        let abs_score = score.abs();
+        match abs_score {
+            x if x >= 5.0 => {
+                if score > 0.0 {
+                    "winning"
+                } else {
+                    "losing"
+                }
+            }
+            x if x >= 3.0 => {
+                if score > 0.0 {
+                    "winning"
+                } else {
+                    "losing"
+                }
+            }
+            x if x >= 2.0 => {
+                if score > 0.0 {
+                    "advantage"
+                } else {
+                    "disadvantage"
+                }
+            }
+            x if x >= 1.0 => {
+                if score > 0.0 {
+                    "advantage"
+                } else {
+                    "disadvantage"
+                }
+            }
+            x if x >= 0.50 => {
+                if score > 0.0 {
+                    "slight advantage"
+                } else {
+                    "slight disadvantage"
+                }
+            }
+            x if x >= 0.25 => {
+                if score > 0.0 {
+                    "slight advantage"
+                } else {
+                    "slight disadvantage"
+                }
+            }
+            _ => "equal",
+        }
     }
 }
 
