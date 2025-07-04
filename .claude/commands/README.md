@@ -18,7 +18,8 @@
 
 ### **System & Help**
 - **`/prompt [focus|help]`** - Context handoff and interactive help system
-  - `/prompt [focus]` - Generate context handoff for LLM transitions  
+  - `/prompt` - Generate comprehensive handoff for LLM continuation (default)
+  - `/prompt [focus]` - Generate focused handoff for specific areas
   - `/prompt help [topic]` - Interactive help for commands/workflows
 - **`/claude-md <action>`** - Essential instruction file maintenance
   - `/claude-md backup|update-mastery` - Backup and skill tracking only
@@ -48,10 +49,15 @@ These commands embody our development philosophy:
 /ship "improve module architecture"   # Document and commit
 ```
 
+**Context Handoff:**
+```bash
+/prompt                              # Comprehensive LLM handoff
+/prompt debugging                    # Debugging-focused handoff
+```
+
 **Maintenance:**
 ```bash
-/prompt debugging                     # Context handoff
-/claude-md backup                     # Before major changes
+/claude-md backup                    # Before major changes
 ```
 
 **Learning:**

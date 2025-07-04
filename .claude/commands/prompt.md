@@ -8,27 +8,40 @@ description: Context handoff prompts and interactive help system
 Context handoff for LLM transitions and interactive help for commands/workflows.
 
 **Usage:**
-- `/prompt [focus_area]` - Generate context handoff prompt
+- `/prompt` - Generate comprehensive handoff prompt (default)
+- `/prompt [focus_area]` - Generate focused handoff prompt  
 - `/prompt help [command|topic]` - Get help on commands/workflows
 
 **Examples:**
-- `/prompt debugging` - Generate debugging context handoff
+- `/prompt` - Complete context handoff for LLM continuation
+- `/prompt debugging` - Generate debugging-focused context handoff
 - `/prompt help tdd` - Get detailed help on TDD workflow
 - `/prompt help workflow` - Show development workflow guidance
 
-## Context Handoff (`/prompt [focus]`)
+## Context Handoff (Default: `/prompt`)
 
-**Generates efficient handoff prompts including:**
-- Current working directory and git status
-- Active tasks and recent changes
-- Next logical steps and current state
-- Key constraints from CLAUDE.md
+**When called without arguments, generates a comprehensive handoff prompt for seamless LLM continuation.**
 
-**Optimized for low context:**
-- No unnecessary file reads
-- Focuses on forward momentum
-- Essential state information only
-- Ready for fresh LLM session
+**Comprehensive handoff includes:**
+- Current working directory and git repository status
+- Recent git commits and active changes (staged/unstaged)
+- Current project structure and key files
+- Active todos and project state
+- Recent development progress and next logical steps
+- Key constraints and patterns from CLAUDE.md
+- Available commands and workflow guidance
+
+**Focused handoff (`/prompt [focus_area]`) includes:**
+- All above context PLUS targeted focus on specific area
+- Focus areas: debugging, architecture, testing, performance, refactoring
+- Specialized context relevant to the focus area
+- Specific next steps for that domain
+
+**Optimized for context efficiency:**
+- Essential state information without full file dumps
+- Forward momentum focus rather than comprehensive history
+- Ready to paste into fresh LLM session
+- Includes enough context for informed continuation
 
 ## Help System (`/prompt help [topic]`)
 
@@ -56,4 +69,8 @@ Context handoff for LLM transitions and interactive help for commands/workflows.
 - **`/claude-md [action]`** - Maintain instruction file
 - **`/prompt [focus|help]`** - Context handoff or help
 
-Execute `/prompt help workflow` for complete development guidance.
+**Most common usage:**
+- `/prompt` - Generate handoff when context window is getting full
+- `/prompt help workflow` - Get complete development process guidance
+
+The default `/prompt` command is designed for seamless LLM handoffs when you need to continue work in a fresh session.
