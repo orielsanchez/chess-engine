@@ -1,6 +1,7 @@
 use chess_engine::tui::{
     ClockWidget, CommandCompletion, CommandHistory, MenuWidget, TuiApp, TuiState,
 };
+use chess_engine::types::Color;
 
 #[cfg(test)]
 mod tui_enhanced_tests {
@@ -166,7 +167,7 @@ mod tui_enhanced_tests {
 
     #[test]
     fn test_clock_widget_no_game() {
-        let widget = ClockWidget::new(None);
+        let widget = ClockWidget::new(None, Color::White, None);
         let content = widget.content();
         assert_eq!(content, "No active game");
     }
@@ -175,7 +176,7 @@ mod tui_enhanced_tests {
     fn test_clock_widget_with_game() {
         // 5 minutes = 300,000 ms for both players
         let clock_data = Some((300000, 300000));
-        let widget = ClockWidget::new(clock_data);
+        let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 5:00 | B: 5:00");
     }
@@ -184,7 +185,7 @@ mod tui_enhanced_tests {
     fn test_clock_widget_different_times() {
         // White: 4:23 = 263,000 ms, Black: 5:17 = 317,000 ms
         let clock_data = Some((263000, 317000));
-        let widget = ClockWidget::new(clock_data);
+        let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 4:23 | B: 5:17");
     }
@@ -193,7 +194,7 @@ mod tui_enhanced_tests {
     fn test_clock_widget_under_minute() {
         // White: 0:45 = 45,000 ms, Black: 0:03 = 3,000 ms
         let clock_data = Some((45000, 3000));
-        let widget = ClockWidget::new(clock_data);
+        let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 0:45 | B: 0:03");
     }
@@ -202,20 +203,20 @@ mod tui_enhanced_tests {
     fn test_clock_widget_zero_time() {
         // Both players at 0:00
         let clock_data = Some((0, 0));
-        let widget = ClockWidget::new(clock_data);
+        let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 0:00 | B: 0:00");
     }
 
     #[test]
     fn test_clock_widget_has_title() {
-        let widget = ClockWidget::new(None);
+        let widget = ClockWidget::new(None, Color::White, None);
         assert_eq!(widget.title(), None); // Clock widget doesn't need a title
     }
 
     #[test]
     fn test_clock_widget_no_borders() {
-        let widget = ClockWidget::new(None);
+        let widget = ClockWidget::new(None, Color::White, None);
         assert!(!widget.has_borders()); // Clock widget should not have borders
     }
 

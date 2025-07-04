@@ -85,7 +85,7 @@ fn test_layout_constraints() {
     // Board should get 70% of height, command should get 30%
     let board_ratio = board_area.height as f32 / terminal_rect.height as f32;
     assert!((0.68..=0.72).contains(&board_ratio));
-    
+
     let command_ratio = command_area.height as f32 / terminal_rect.height as f32;
     assert!((0.28..=0.32).contains(&command_ratio));
 }

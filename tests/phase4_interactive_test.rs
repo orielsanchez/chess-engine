@@ -73,8 +73,9 @@ mod phase4_interactive_tests {
         let result = app.make_player_move(player_move);
         assert!(result.is_ok());
 
-        // Should now be engine's turn (Black)
-        assert_eq!(app.get_current_player_turn(), Color::Black);
+        // Engine should automatically respond and return control to player
+        // After engine move, should be back to player's turn (White)
+        assert_eq!(app.get_current_player_turn(), Color::White);
 
         // Engine should make a move automatically
         let engine_move = app.get_last_engine_move();
@@ -169,14 +170,15 @@ mod phase4_interactive_tests {
         app.make_player_move(move1).unwrap();
 
         // Game state should persist across TUI state changes
+        // After engine responds, should be back to player's turn (White)
         app.set_tui_state(TuiState::Board);
-        assert_eq!(app.get_current_player_turn(), Color::Black);
+        assert_eq!(app.get_current_player_turn(), Color::White);
 
         app.set_tui_state(TuiState::Command);
-        assert_eq!(app.get_current_player_turn(), Color::Black);
+        assert_eq!(app.get_current_player_turn(), Color::White);
 
         app.set_tui_state(TuiState::GamePlay);
-        assert_eq!(app.get_current_player_turn(), Color::Black);
+        assert_eq!(app.get_current_player_turn(), Color::White);
 
         // Move history should be maintained
         let history = app.get_move_history();
@@ -262,7 +264,7 @@ mod phase4_interactive_tests {
         let move1 = Move::quiet(from, to);
         app.make_player_move(move1).unwrap();
 
-        // Now black's time should tick down
-        assert_eq!(app.get_current_player_turn(), Color::Black);
+        // After engine responds, should be back to player's turn (White)
+        assert_eq!(app.get_current_player_turn(), Color::White);
     }
 }

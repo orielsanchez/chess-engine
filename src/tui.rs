@@ -1,7 +1,7 @@
 use crate::interactive::{InteractiveCommand, InteractiveEngine, InteractiveResponse};
 use crate::moves::Move;
 use crate::position::Position;
-use crate::search::SearchResult;
+use crate::search::{SearchEngine, SearchResult};
 use crate::types::{Color, Square};
 use ratatui::{
     Frame,
@@ -253,6 +253,7 @@ impl CommandHistory {
 
 pub struct TuiApp {
     engine: InteractiveEngine,
+    search_engine: SearchEngine,
     state: TuiState,
     command_buffer: String,
     cursor_position: usize,
@@ -271,6 +272,7 @@ impl TuiApp {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             engine: InteractiveEngine::new()?,
+            search_engine: SearchEngine::new(),
             state: TuiState::Command,
             command_buffer: String::new(),
             cursor_position: 0,
@@ -609,16 +611,20 @@ impl TuiApp {
             Move { algebraic_move } => {
                 if let Ok(chess_move) = crate::moves::Move::from_algebraic(&algebraic_move) {
                     // First delegate to engine to handle the move on the board
-                    let engine_response = self.engine.handle_command(Move { algebraic_move: algebraic_move.clone() })?;
-                    
+                    let engine_response = self.engine.handle_command(Move {
+                        algebraic_move: algebraic_move.clone(),
+                    })?;
+
                     // If the move was successful, update TUI game state (clock, engine moves)
-                    if let InteractiveResponse::MoveResult { success: true, .. } = &engine_response {
+                    if let InteractiveResponse::MoveResult { success: true, .. } = &engine_response
+                    {
                         if let Err(e) = self.make_player_move(chess_move) {
                             // If TUI game state update fails, we should handle it gracefully
-                            self.last_response = Some(format!("Move executed but game state error: {}", e));
+                            self.last_response =
+                                Some(format!("Move executed but game state error: {}", e));
                         }
                     }
-                    
+
                     Ok(engine_response)
                 } else {
                     Ok(InteractiveResponse::MoveResult {
@@ -698,7 +704,11 @@ impl TuiApp {
     }
 
     pub fn create_clock_widget(&self) -> ClockWidget {
-        ClockWidget::new(self.game_state.game_clock)
+        ClockWidget::new(
+            self.game_state.game_clock,
+            self.game_state.player_turn,
+            self.game_state.last_move_time,
+        )
     }
 
     pub fn create_evaluation_widget<'a>(
@@ -838,7 +848,7 @@ impl TuiApp {
                 }
             }
         }
-        
+
         // Basic move validation - in a real implementation this would use the engine
         // For now, just assume valid moves and toggle turn
         self.game_state.move_history.push(player_move);
@@ -851,17 +861,20 @@ impl TuiApp {
 
         // Generate and execute engine move if we're playing vs engine and it's the engine's turn
         if let GameMode::PlayVsEngine { player_color, .. } = &self.game_state.mode {
-            if self.game_state.player_turn != *player_color {
+            let player_color_value = *player_color;
+            if self.game_state.player_turn != player_color_value {
                 // Generate the engine move
                 if let Some(engine_move) = self.generate_engine_move() {
                     // Execute the engine move through the engine
-                    let move_str = format!("{}", engine_move.to_algebraic());
-                    if let Ok(move_cmd) = InteractiveEngine::parse_command(&format!("move {}", move_str)) {
-                        if let Ok(_) = self.engine.handle_command(move_cmd) {
+                    let move_str = engine_move.to_algebraic().to_string();
+                    if let Ok(move_cmd) =
+                        InteractiveEngine::parse_command(&format!("move {}", move_str))
+                    {
+                        if self.engine.handle_command(move_cmd).is_ok() {
                             // Add to move history and switch turn back to player
                             self.game_state.move_history.push(engine_move);
                             self.game_state.last_move = Some(engine_move);
-                            self.game_state.player_turn = *player_color; // Back to player's turn
+                            self.game_state.player_turn = player_color_value; // Back to player's turn
                             self.game_state.last_move_time = Some(Instant::now());
                             self.last_engine_move = Some(engine_move);
                         }
@@ -1011,18 +1024,25 @@ impl TuiApp {
     }
 
     // Helper methods
-    fn generate_engine_move(&self) -> Option<Move> {
-        // Use the actual engine to generate a move
-        if let Ok(legal_moves) = self.position().generate_legal_moves() {
-            if !legal_moves.is_empty() {
-                // For now, just pick the first legal move
-                // In a real implementation, this would use search
-                Some(legal_moves[0])
-            } else {
-                None
+    fn generate_engine_move(&mut self) -> Option<Move> {
+        // Get the current position first to avoid borrowing conflicts
+        let current_position = self.position().clone();
+
+        // Use the search engine to find the best move
+        match self.search_engine.find_best_move(&current_position) {
+            Ok(search_result) => Some(search_result.best_move),
+            Err(_) => {
+                // Fallback to first legal move if search fails
+                if let Ok(legal_moves) = current_position.generate_legal_moves() {
+                    if !legal_moves.is_empty() {
+                        Some(legal_moves[0])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
-        } else {
-            None
         }
     }
 
@@ -1464,11 +1484,21 @@ fn find_common_prefix(strings: &[String]) -> String {
 
 pub struct ClockWidget {
     clock_data: Option<(u64, u64)>,
+    current_player: Color,
+    last_move_time: Option<Instant>,
 }
 
 impl ClockWidget {
-    pub fn new(clock_data: Option<(u64, u64)>) -> Self {
-        Self { clock_data }
+    pub fn new(
+        clock_data: Option<(u64, u64)>,
+        current_player: Color,
+        last_move_time: Option<Instant>,
+    ) -> Self {
+        Self {
+            clock_data,
+            current_player,
+            last_move_time,
+        }
     }
 
     pub fn title(&self) -> Option<&str> {
@@ -1481,7 +1511,20 @@ impl ClockWidget {
 
     pub fn content(&self) -> String {
         match self.clock_data {
-            Some((white_ms, black_ms)) => {
+            Some((mut white_ms, mut black_ms)) => {
+                // Calculate real-time clock by subtracting elapsed time from current player
+                if let Some(last_move_time) = self.last_move_time {
+                    let elapsed = last_move_time.elapsed().as_millis() as u64;
+                    match self.current_player {
+                        Color::White => {
+                            white_ms = white_ms.saturating_sub(elapsed);
+                        }
+                        Color::Black => {
+                            black_ms = black_ms.saturating_sub(elapsed);
+                        }
+                    }
+                }
+
                 let white_time = Self::format_time(white_ms);
                 let black_time = Self::format_time(black_ms);
                 format!("W: {} | B: {}", white_time, black_time)
