@@ -2,6 +2,16 @@ use crate::position::Position;
 use crate::types::{Color, PieceType, Square};
 use std::ops::{AddAssign, SubAssign};
 
+/// Game phase enumeration for phase-specific evaluation
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum GamePhase {
+    Opening,
+    EarlyMiddlegame,
+    LateMiddlegame,
+    Endgame,
+    PawnEndgame,
+}
+
 /// Evaluation score with separate middlegame and endgame values
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy)]
 pub struct Score {
@@ -42,6 +52,8 @@ const MOBILITY_WEIGHTS: [(i32, i32); 6] = [
     (1, 1), // Queen
     (0, 0), // King (not evaluated)
 ];
+
+// Game phase detection constants (in get_game_phase method)
 
 // Piece-square tables (from white's perspective)
 // Values in centipawns (100 = 1 pawn)
@@ -360,6 +372,16 @@ impl Position {
         let mobility_score = self.evaluate_piece_mobility();
         score += mobility_score.interpolate(phase_factor);
 
+        // Add phase-specific evaluation bonuses
+        let phase_specific_score = match self.get_game_phase() {
+            GamePhase::Opening => self.evaluate_opening_phase(),
+            GamePhase::EarlyMiddlegame | GamePhase::LateMiddlegame => {
+                self.evaluate_middlegame_phase()
+            }
+            GamePhase::Endgame | GamePhase::PawnEndgame => self.evaluate_endgame_phase(),
+        };
+        score += phase_specific_score.interpolate(phase_factor);
+
         score
     }
 
@@ -600,6 +622,42 @@ impl Position {
         (current_material as f32 / MAX_PHASE_MATERIAL as f32).min(1.0)
     }
 
+    /// Determine current game phase based on material and position characteristics
+    pub fn get_game_phase(&self) -> GamePhase {
+        let material_factor = self.get_game_phase_factor();
+
+        // Check for pawn endgame first (only pawns and kings)
+        if self.is_pawn_endgame() {
+            return GamePhase::PawnEndgame;
+        }
+
+        // Material-based phase detection with realistic thresholds
+        if material_factor >= 0.85 {
+            GamePhase::Opening
+        } else if material_factor >= 0.5 {
+            GamePhase::EarlyMiddlegame
+        } else if material_factor >= 0.25 {
+            GamePhase::LateMiddlegame
+        } else {
+            GamePhase::Endgame
+        }
+    }
+
+    /// Check if position is a pure pawn endgame (only pawns and kings)
+    fn is_pawn_endgame(&self) -> bool {
+        for square in 0..64 {
+            if let Ok(square_obj) = Square::from_index(square as u8) {
+                if let Some(piece) = self.board.piece_at(square_obj) {
+                    match piece.piece_type {
+                        PieceType::Pawn | PieceType::King => continue,
+                        _ => return false, // Found a piece that's not a pawn or king
+                    }
+                }
+            }
+        }
+        true
+    }
+
     /// Get total non-pawn material on the board
     fn get_non_pawn_material(&self) -> i32 {
         let mut material = 0;
@@ -644,6 +702,304 @@ impl Position {
         };
 
         table[index]
+    }
+
+    /// Evaluate opening-specific factors like development and center control
+    pub fn evaluate_opening_phase(&self) -> Score {
+        let mut score = Score::default();
+
+        // Development bonus for knights and bishops off back rank
+        score += self.evaluate_piece_development();
+
+        // Center control bonus for pawns and pieces in central squares
+        score += self.evaluate_center_control();
+
+        // Castling bonus - safety in opening
+        score += self.evaluate_castling_bonus();
+
+        score
+    }
+
+    /// Evaluate middlegame-specific factors like piece coordination and tactics
+    pub fn evaluate_middlegame_phase(&self) -> Score {
+        let mut score = Score::default();
+
+        // Piece coordination and activity
+        score += self.evaluate_piece_coordination();
+
+        // Tactical opportunities (attacks, pins, forks)
+        score += self.evaluate_tactical_opportunities();
+
+        score
+    }
+
+    /// Evaluate endgame-specific factors like king activity and pawn promotion
+    pub fn evaluate_endgame_phase(&self) -> Score {
+        let mut score = Score::default();
+
+        // King activity bonus in endgames
+        score += self.evaluate_king_activity();
+
+        // Pawn promotion race evaluation
+        score += self.evaluate_pawn_races();
+
+        // Opposition evaluation in king endgames
+        score += self.evaluate_opposition();
+
+        score
+    }
+
+    /// Evaluate piece development (knights and bishops off back rank)
+    fn evaluate_piece_development(&self) -> Score {
+        let mut score = Score::default();
+        const DEVELOPMENT_BONUS: Score = Score { mg: 20, eg: 5 };
+
+        for square in 0..64 {
+            if let Ok(square_obj) = Square::from_index(square as u8) {
+                if let Some(piece) = self.board.piece_at(square_obj) {
+                    let rank = square / 8;
+
+                    // Check if piece is developed (off back rank)
+                    let is_developed = match piece.color {
+                        Color::White => {
+                            rank > 0
+                                && (piece.piece_type == PieceType::Knight
+                                    || piece.piece_type == PieceType::Bishop)
+                        }
+                        Color::Black => {
+                            rank < 7
+                                && (piece.piece_type == PieceType::Knight
+                                    || piece.piece_type == PieceType::Bishop)
+                        }
+                    };
+
+                    if is_developed {
+                        match piece.color {
+                            Color::White => score += DEVELOPMENT_BONUS,
+                            Color::Black => score -= DEVELOPMENT_BONUS,
+                        }
+                    }
+                }
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate center control (pawns and pieces in central squares)
+    fn evaluate_center_control(&self) -> Score {
+        let mut score = Score::default();
+        const CENTER_CONTROL_BONUS: Score = Score { mg: 15, eg: 5 };
+
+        // Central squares: d4=19, e4=20, d5=27, e5=28 (rank*8 + file, 0-based)
+        let central_squares = [19, 20, 27, 28]; // d4, e4, d5, e5 in 0-63 notation
+
+        for &square in &central_squares {
+            if let Ok(square_obj) = Square::from_index(square as u8) {
+                if let Some(piece) = self.board.piece_at(square_obj) {
+                    if piece.piece_type == PieceType::Pawn {
+                        match piece.color {
+                            Color::White => score += CENTER_CONTROL_BONUS,
+                            Color::Black => score -= CENTER_CONTROL_BONUS,
+                        }
+                    }
+                }
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate castling bonus in opening
+    fn evaluate_castling_bonus(&self) -> Score {
+        let mut score = Score::default();
+        const CASTLING_BONUS: Score = Score { mg: 25, eg: 5 };
+
+        // Check if kings are in castled positions
+        if let Some(white_king) = self.find_king(Color::White) {
+            let king_square = white_king.index() as usize;
+            if self.is_king_castled(Color::White, king_square) {
+                score += CASTLING_BONUS;
+            }
+        }
+
+        if let Some(black_king) = self.find_king(Color::Black) {
+            let king_square = black_king.index() as usize;
+            if self.is_king_castled(Color::Black, king_square) {
+                score -= CASTLING_BONUS;
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate piece coordination in middlegame
+    fn evaluate_piece_coordination(&self) -> Score {
+        let mut score = Score::default();
+        const COORDINATION_BONUS: Score = Score { mg: 10, eg: 5 };
+
+        // Simple heuristic: count pieces attacking central squares
+        let central_squares = [19, 20, 27, 28]; // d4, e4, d5, e5
+
+        for &square in &central_squares {
+            if let Ok(square_obj) = Square::from_index(square as u8) {
+                let white_attackers = self.count_attackers(square_obj, Color::White);
+                let black_attackers = self.count_attackers(square_obj, Color::Black);
+
+                score.mg += (white_attackers - black_attackers) * COORDINATION_BONUS.mg;
+                score.eg += (white_attackers - black_attackers) * COORDINATION_BONUS.eg;
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate tactical opportunities
+    fn evaluate_tactical_opportunities(&self) -> Score {
+        // Placeholder for now - tactical evaluation is complex
+        // Would include: discovered attacks, pins, forks, skewers
+        Score::default()
+    }
+
+    /// Evaluate king activity in endgames
+    fn evaluate_king_activity(&self) -> Score {
+        let mut score = Score::default();
+        const KING_ACTIVITY_BONUS: Score = Score { mg: 5, eg: 20 };
+
+        // Bonus for centralized kings in endgame
+        if let Some(white_king) = self.find_king(Color::White) {
+            let king_square = white_king.index() as usize;
+            let rank = king_square / 8;
+            let file = king_square % 8;
+
+            // Central activity bonus
+            if (2..=5).contains(&rank) && (2..=5).contains(&file) {
+                score += KING_ACTIVITY_BONUS;
+            }
+        }
+
+        if let Some(black_king) = self.find_king(Color::Black) {
+            let king_square = black_king.index() as usize;
+            let rank = king_square / 8;
+            let file = king_square % 8;
+
+            // Central activity bonus
+            if (2..=5).contains(&rank) && (2..=5).contains(&file) {
+                score -= KING_ACTIVITY_BONUS;
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate pawn promotion races
+    fn evaluate_pawn_races(&self) -> Score {
+        let mut score = Score::default();
+        const PROMOTION_RACE_BONUS: Score = Score { mg: 10, eg: 50 };
+
+        // Simple heuristic: closer pawns to promotion get bonus
+        for square in 0..64 {
+            if let Ok(square_obj) = Square::from_index(square as u8) {
+                if let Some(piece) = self.board.piece_at(square_obj) {
+                    if piece.piece_type == PieceType::Pawn {
+                        let rank = square / 8;
+                        let distance_to_promotion = match piece.color {
+                            Color::White => 7 - rank,
+                            Color::Black => rank,
+                        };
+
+                        // Closer pawns get bigger bonus
+                        let bonus_multiplier = 8 - distance_to_promotion;
+                        let bonus = Score::new(
+                            PROMOTION_RACE_BONUS.mg * bonus_multiplier / 8,
+                            PROMOTION_RACE_BONUS.eg * bonus_multiplier / 8,
+                        );
+
+                        match piece.color {
+                            Color::White => score += bonus,
+                            Color::Black => score -= bonus,
+                        }
+                    }
+                }
+            }
+        }
+
+        score
+    }
+
+    /// Evaluate opposition in king endgames
+    fn evaluate_opposition(&self) -> Score {
+        let mut score = Score::default();
+        const OPPOSITION_BONUS: Score = Score { mg: 0, eg: 15 };
+
+        // Check for direct opposition between kings
+        if let (Some(white_king), Some(black_king)) =
+            (self.find_king(Color::White), self.find_king(Color::Black))
+        {
+            let white_square = white_king.index() as usize;
+            let black_square = black_king.index() as usize;
+
+            let white_rank = white_square / 8;
+            let white_file = white_square % 8;
+            let black_rank = black_square / 8;
+            let black_file = black_square % 8;
+
+            // Direct opposition: same file or rank, separated by one square
+            let is_opposition = (white_file == black_file
+                && (white_rank as i32 - black_rank as i32).abs() == 2)
+                || (white_rank == black_rank && (white_file as i32 - black_file as i32).abs() == 2);
+
+            if is_opposition {
+                // Player to move has disadvantage in opposition
+                match self.side_to_move {
+                    Color::White => score -= OPPOSITION_BONUS,
+                    Color::Black => score += OPPOSITION_BONUS,
+                }
+            }
+        }
+
+        score
+    }
+
+    /// Count pieces attacking a given square for a color
+    fn count_attackers(&self, square: Square, color: Color) -> i32 {
+        let mut count = 0;
+
+        // Check all squares for pieces of the given color that attack the target square
+        for sq in 0..64 {
+            if let Ok(from_square) = Square::from_index(sq as u8) {
+                if let Some(piece) = self.board.piece_at(from_square) {
+                    if piece.color == color {
+                        // Simple check: if piece can move to target square, it's attacking it
+                        // This is a simplified version - real implementation would need proper attack detection
+                        if self.piece_attacks_square(from_square, square, piece.piece_type) {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    /// Check if a piece at from_square attacks to_square (simplified)
+    fn piece_attacks_square(&self, from: Square, to: Square, piece_type: PieceType) -> bool {
+        // Simplified attack detection - would need full implementation for real use
+        match piece_type {
+            PieceType::Knight => {
+                let from_rank = from.rank() as i8;
+                let from_file = from.file() as i8;
+                let to_rank = to.rank() as i8;
+                let to_file = to.file() as i8;
+
+                let rank_diff = (from_rank - to_rank).abs();
+                let file_diff = (from_file - to_file).abs();
+
+                (rank_diff == 2 && file_diff == 1) || (rank_diff == 1 && file_diff == 2)
+            }
+            _ => false, // Placeholder for other pieces
+        }
     }
 }
 
