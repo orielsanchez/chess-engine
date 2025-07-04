@@ -822,6 +822,23 @@ impl TuiApp {
     }
 
     pub fn make_player_move(&mut self, player_move: Move) -> Result<(), String> {
+        // Update clock time before switching turns
+        if let Some((white_time, black_time)) = self.game_state.game_clock {
+            if let Some(last_move_time) = self.game_state.last_move_time {
+                let elapsed = last_move_time.elapsed().as_millis() as u64;
+                match self.game_state.player_turn {
+                    Color::White => {
+                        let new_white_time = white_time.saturating_sub(elapsed);
+                        self.game_state.game_clock = Some((new_white_time, black_time));
+                    }
+                    Color::Black => {
+                        let new_black_time = black_time.saturating_sub(elapsed);
+                        self.game_state.game_clock = Some((white_time, new_black_time));
+                    }
+                }
+            }
+        }
+        
         // Basic move validation - in a real implementation this would use the engine
         // For now, just assume valid moves and toggle turn
         self.game_state.move_history.push(player_move);
@@ -832,13 +849,23 @@ impl TuiApp {
         };
         self.game_state.last_move_time = Some(Instant::now());
 
-        // Generate engine move if we're playing vs engine and it's the engine's turn
+        // Generate and execute engine move if we're playing vs engine and it's the engine's turn
         if let GameMode::PlayVsEngine { player_color, .. } = &self.game_state.mode {
             if self.game_state.player_turn != *player_color {
-                // Generate the engine move and store it for later execution
-                let engine_move = self.generate_engine_move();
-                if let Some(engine_move) = engine_move {
-                    self.last_engine_move = Some(engine_move);
+                // Generate the engine move
+                if let Some(engine_move) = self.generate_engine_move() {
+                    // Execute the engine move through the engine
+                    let move_str = format!("{}", engine_move.to_algebraic());
+                    if let Ok(move_cmd) = InteractiveEngine::parse_command(&format!("move {}", move_str)) {
+                        if let Ok(_) = self.engine.handle_command(move_cmd) {
+                            // Add to move history and switch turn back to player
+                            self.game_state.move_history.push(engine_move);
+                            self.game_state.last_move = Some(engine_move);
+                            self.game_state.player_turn = *player_color; // Back to player's turn
+                            self.game_state.last_move_time = Some(Instant::now());
+                            self.last_engine_move = Some(engine_move);
+                        }
+                    }
                 }
             }
         }
@@ -985,11 +1012,18 @@ impl TuiApp {
 
     // Helper methods
     fn generate_engine_move(&self) -> Option<Move> {
-        // Simplified engine move generation - return a basic e7e5 for black
-        Some(Move::quiet(
-            Self::square_from_string("e7"),
-            Self::square_from_string("e5"),
-        ))
+        // Use the actual engine to generate a move
+        if let Ok(legal_moves) = self.position().generate_legal_moves() {
+            if !legal_moves.is_empty() {
+                // For now, just pick the first legal move
+                // In a real implementation, this would use search
+                Some(legal_moves[0])
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn update_threats(&mut self) {
