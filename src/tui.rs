@@ -1,6 +1,7 @@
 use crate::interactive::InteractiveEngine;
 use crate::moves::Move;
 use crate::position::Position;
+use crate::search::SearchResult;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -13,6 +14,12 @@ use std::collections::VecDeque;
 pub enum TuiState {
     Command,
     Board,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutMode {
+    TwoPanelClassic,
+    ThreePanelAnalysis,
 }
 
 pub struct CommandCompletion {
@@ -206,6 +213,8 @@ pub struct TuiApp {
     last_response: Option<String>,
     completion: CommandCompletion,
     history: CommandHistory,
+    search_result: Option<SearchResult>,
+    layout_mode: LayoutMode,
 }
 
 impl TuiApp {
@@ -218,6 +227,8 @@ impl TuiApp {
             last_response: None,
             completion: CommandCompletion::new(),
             history: CommandHistory::new(),
+            search_result: None,
+            layout_mode: LayoutMode::TwoPanelClassic,
         })
     }
 
@@ -377,14 +388,60 @@ impl TuiApp {
     }
 
     pub fn create_layout(&self, area: Rect) -> Vec<Rect> {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(65), // Board area
-                Constraint::Percentage(35), // Command area
-            ])
-            .split(area)
-            .to_vec()
+        match self.layout_mode {
+            LayoutMode::TwoPanelClassic => {
+                self.create_layout_with_mode(LayoutMode::TwoPanelClassic, area)
+            }
+            LayoutMode::ThreePanelAnalysis => {
+                // Use three-panel mode if we have search results, otherwise fall back to two-panel
+                if self.search_result.is_some() {
+                    self.create_layout_with_mode(LayoutMode::ThreePanelAnalysis, area)
+                } else {
+                    self.create_layout_with_mode(LayoutMode::TwoPanelClassic, area)
+                }
+            }
+        }
+    }
+
+    pub fn create_layout_with_mode(&self, mode: LayoutMode, area: Rect) -> Vec<Rect> {
+        match mode {
+            LayoutMode::TwoPanelClassic => {
+                Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(65), // Board area
+                        Constraint::Percentage(35), // Command area
+                    ])
+                    .split(area)
+                    .to_vec()
+            }
+            LayoutMode::ThreePanelAnalysis => {
+                // Split horizontally: Board (50%) | Right side (50%)
+                let horizontal_layout = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(50), // Board area
+                        Constraint::Percentage(50), // Right side (commands + analysis)
+                    ])
+                    .split(area);
+
+                // Split right side vertically: Commands (50%) | Analysis (50%)
+                let right_side = horizontal_layout[1];
+                let vertical_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Percentage(50), // Command area
+                        Constraint::Percentage(50), // Analysis area
+                    ])
+                    .split(right_side);
+
+                vec![
+                    horizontal_layout[0], // Board
+                    vertical_layout[0],   // Commands
+                    vertical_layout[1],   // Analysis
+                ]
+            }
+        }
     }
 
     pub fn create_board_widget<'a>(&self, position: &'a Position) -> BoardWidget<'a> {
@@ -393,6 +450,20 @@ impl TuiApp {
 
     pub fn create_command_widget(&self) -> CommandWidget {
         CommandWidget::new(&self.command_buffer, self.last_response.as_deref())
+    }
+
+    pub fn create_evaluation_widget<'a>(
+        &self,
+        search_result: &'a SearchResult,
+    ) -> EvaluationWidget<'a> {
+        EvaluationWidget::new(search_result)
+    }
+
+    pub fn create_principal_variation_widget<'a>(
+        &self,
+        search_result: &'a SearchResult,
+    ) -> PrincipalVariationWidget<'a> {
+        PrincipalVariationWidget::new(search_result)
     }
 
     pub fn render(&self, frame: &mut Frame) {
@@ -407,6 +478,31 @@ impl TuiApp {
         // Render command area
         let command_widget = self.create_command_widget();
         frame.render_widget(command_widget, command_area);
+
+        // Render analysis area if in three-panel mode and have search results
+        if layout.len() > 2 {
+            if let Some(ref search_result) = self.search_result {
+                let analysis_area = layout[2];
+                let pv_widget = self.create_principal_variation_widget(search_result);
+                frame.render_widget(pv_widget, analysis_area);
+            }
+        }
+    }
+
+    pub fn set_search_result(&mut self, search_result: Option<SearchResult>) {
+        self.search_result = search_result;
+    }
+
+    pub fn search_result(&self) -> &Option<SearchResult> {
+        &self.search_result
+    }
+
+    pub fn set_layout_mode(&mut self, mode: LayoutMode) {
+        self.layout_mode = mode;
+    }
+
+    pub fn layout_mode(&self) -> &LayoutMode {
+        &self.layout_mode
     }
 }
 
@@ -491,6 +587,164 @@ impl<'a> Widget for CommandWidget<'a> {
             .block(
                 Block::default()
                     .title("Commands")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::White)),
+            )
+            .style(Style::default().fg(Color::White));
+
+        paragraph.render(area, buf);
+    }
+}
+
+pub struct EvaluationWidget<'a> {
+    search_result: &'a SearchResult,
+}
+
+impl<'a> EvaluationWidget<'a> {
+    pub fn new(search_result: &'a SearchResult) -> Self {
+        Self { search_result }
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        Some("Evaluation")
+    }
+
+    pub fn has_borders(&self) -> bool {
+        true
+    }
+
+    pub fn content(&self) -> String {
+        let score = self.search_result.evaluation as f64 / 100.0;
+        let score_str = if score > 0.0 {
+            format!("+{:.2}", score)
+        } else if score < 0.0 {
+            format!("{:.2}", score)
+        } else {
+            "0.00".to_string()
+        };
+
+        let best_move_str = self.search_result.best_move.to_algebraic();
+
+        format!(
+            "Score: {}\nDepth: {}\nBest: {}\n\nMaterial: +0.00\nPosition: +0.00\nPawns: +0.00",
+            score_str, self.search_result.completed_depth, best_move_str
+        )
+    }
+}
+
+impl<'a> Widget for EvaluationWidget<'a> {
+    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
+        let content = self.content();
+
+        let paragraph = Paragraph::new(content)
+            .block(
+                Block::default()
+                    .title("Evaluation")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::White)),
+            )
+            .style(Style::default().fg(Color::White));
+
+        paragraph.render(area, buf);
+    }
+}
+
+pub struct PrincipalVariationWidget<'a> {
+    search_result: &'a SearchResult,
+}
+
+impl<'a> PrincipalVariationWidget<'a> {
+    pub fn new(search_result: &'a SearchResult) -> Self {
+        Self { search_result }
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        Some("Principal Variation")
+    }
+
+    pub fn has_borders(&self) -> bool {
+        true
+    }
+
+    pub fn content(&self) -> String {
+        let depth = self.search_result.completed_depth;
+        let pv = &self.search_result.principal_variation;
+
+        if pv.is_empty() {
+            return format!("Depth: {}\n\nNo variation", depth);
+        }
+
+        let mut content = format!("Depth: {}\n\n", depth);
+
+        // Format moves in pairs: "1. e4    e5"
+        let mut move_number = 1;
+        let mut i = 0;
+
+        while i < pv.len() {
+            let white_move = self.format_move_to_algebraic(&pv[i]);
+
+            if i + 1 < pv.len() {
+                // Both white and black moves
+                let black_move = self.format_move_to_algebraic(&pv[i + 1]);
+                content.push_str(&format!(
+                    "{}. {}    {}\n",
+                    move_number, white_move, black_move
+                ));
+                i += 2;
+            } else {
+                // Only white move
+                content.push_str(&format!("{}. {}\n", move_number, white_move));
+                i += 1;
+            }
+
+            move_number += 1;
+        }
+
+        content
+    }
+
+    fn format_move_to_algebraic(&self, move_obj: &Move) -> String {
+        // For now, use simple algebraic notation - we'll enhance this later
+        let algebraic = move_obj.to_algebraic();
+
+        // Convert coordinate notation (e2e4) to simple algebraic (e4)
+        // This is a basic conversion - we'll implement proper SAN later
+        if algebraic.len() >= 4 {
+            let from_square = &algebraic[0..2];
+            let to_square = &algebraic[2..4];
+
+            // Basic piece detection based on from square
+            match from_square {
+                // Pawns - just show destination
+                "a2" | "b2" | "c2" | "d2" | "e2" | "f2" | "g2" | "h2" | "a7" | "b7" | "c7"
+                | "d7" | "e7" | "f7" | "g7" | "h7" => {
+                    to_square.to_string() // e.g., "e4" from "e2e4"
+                }
+                // Knights from starting positions
+                "b1" | "g1" | "b8" | "g8" => {
+                    format!("N{}", to_square)
+                }
+                // Bishops from starting positions
+                "c1" | "f1" | "c8" | "f8" => {
+                    format!("B{}", to_square)
+                }
+                // Other pieces - use coordinate notation for now
+                _ => algebraic,
+            }
+        } else {
+            algebraic
+        }
+    }
+}
+
+impl<'a> Widget for PrincipalVariationWidget<'a> {
+    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
+        let content = self.content();
+
+        let paragraph = Paragraph::new(content)
+            .block(
+                Block::default()
+                    .title("Principal Variation")
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::White)),
             )
