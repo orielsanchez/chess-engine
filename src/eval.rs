@@ -1,5 +1,6 @@
 use crate::position::Position;
 use crate::types::{Color, PieceType, Square};
+use std::ops::{AddAssign, SubAssign};
 
 /// Evaluation score with separate middlegame and endgame values
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy)]
@@ -17,6 +18,30 @@ impl Score {
         (self.mg as f32 * phase_factor + self.eg as f32 * (1.0 - phase_factor)) as i32
     }
 }
+
+impl AddAssign for Score {
+    fn add_assign(&mut self, other: Self) {
+        self.mg += other.mg;
+        self.eg += other.eg;
+    }
+}
+
+impl SubAssign for Score {
+    fn sub_assign(&mut self, other: Self) {
+        self.mg -= other.mg;
+        self.eg -= other.eg;
+    }
+}
+
+// Piece mobility weights (mg, eg values in centipawns per move)
+const MOBILITY_WEIGHTS: [(i32, i32); 6] = [
+    (5, 3), // Pawn
+    (4, 2), // Knight
+    (3, 2), // Bishop
+    (2, 1), // Rook
+    (1, 1), // Queen
+    (0, 0), // King (not evaluated)
+];
 
 // Piece-square tables (from white's perspective)
 // Values in centipawns (100 = 1 pawn)
@@ -76,6 +101,231 @@ impl Position {
         }
     }
 
+    /// Evaluate piece mobility for all pieces
+    ///
+    /// Piece mobility rewards pieces that have more legal moves available.
+    /// Different piece types have different mobility weights:
+    /// - Pawns: 5mg/3eg per move (high value as pawn mobility is rare)
+    /// - Knights: 4mg/2eg per move (knights value mobility highly)
+    /// - Bishops: 3mg/2eg per move (bishops need open diagonals)
+    /// - Rooks: 2mg/1eg per move (rooks are powerful but less mobility-dependent)
+    /// - Queens: 1mg/1eg per move (queens always have moves, less critical)
+    /// - Kings: Not evaluated for mobility
+    ///
+    /// Mobility is more important in the middlegame than the endgame.
+    pub fn evaluate_piece_mobility(&self) -> Score {
+        let mut score = Score::default();
+
+        // Evaluate white mobility (positive)
+        score += self.evaluate_mobility_for_color(Color::White);
+
+        // Evaluate black mobility (negative)
+        score -= self.evaluate_mobility_for_color(Color::Black);
+
+        score
+    }
+
+    /// Evaluate mobility for pieces of a specific color
+    fn evaluate_mobility_for_color(&self, color: Color) -> Score {
+        let mut score = Score::default();
+
+        for (square, piece) in self.pieces_of_color(color) {
+            if piece.color == color {
+                let move_count = self.count_piece_moves(square, piece.piece_type);
+                let piece_index = piece.piece_type as usize;
+                let (mg_weight, eg_weight) = MOBILITY_WEIGHTS[piece_index];
+
+                let mobility_bonus = Score::new(mg_weight * move_count, eg_weight * move_count);
+                score += mobility_bonus;
+            }
+        }
+
+        score
+    }
+
+    /// Count the number of pseudo-legal moves for a piece at a given square
+    fn count_piece_moves(&self, square: Square, piece_type: PieceType) -> i32 {
+        match piece_type {
+            PieceType::Knight => self.count_knight_moves(square),
+            PieceType::Bishop => self.count_bishop_moves(square),
+            PieceType::Rook => self.count_rook_moves(square),
+            PieceType::Queen => self.count_queen_moves(square),
+            PieceType::Pawn => self.count_pawn_moves(square),
+            PieceType::King => 0, // King mobility not evaluated
+        }
+    }
+
+    /// Count knight moves from a square
+    fn count_knight_moves(&self, from: Square) -> i32 {
+        let from_rank = from.rank() as i8;
+        let from_file = from.file() as i8;
+        let knight_offsets = [
+            (-2, -1),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
+        ];
+
+        let mut count = 0;
+        for (rank_offset, file_offset) in knight_offsets.iter() {
+            let to_rank = from_rank + rank_offset;
+            let to_file = from_file + file_offset;
+
+            if (0..8).contains(&to_rank) && (0..8).contains(&to_file) {
+                if let Ok(to_square) = Square::new(to_rank as u8, to_file as u8) {
+                    if let Some(piece_at_square) = self.piece_at(from) {
+                        let piece_color = piece_at_square.color;
+                        if self.is_empty(to_square)
+                            || self.is_occupied_by(to_square, piece_color.opposite())
+                        {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    /// Count bishop moves from a square  
+    pub fn count_bishop_moves(&self, from: Square) -> i32 {
+        let directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
+        self.count_sliding_moves(from, &directions)
+    }
+
+    /// Count rook moves from a square
+    fn count_rook_moves(&self, from: Square) -> i32 {
+        let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+        self.count_sliding_moves(from, &directions)
+    }
+
+    /// Count queen moves from a square
+    fn count_queen_moves(&self, from: Square) -> i32 {
+        let directions = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ];
+        self.count_sliding_moves(from, &directions)
+    }
+
+    /// Count pawn moves from a square
+    fn count_pawn_moves(&self, from: Square) -> i32 {
+        if let Some(piece) = self.piece_at(from) {
+            let color = piece.color;
+            let direction = match color {
+                Color::White => 1i8,
+                Color::Black => -1i8,
+            };
+            let start_rank = match color {
+                Color::White => 1,
+                Color::Black => 6,
+            };
+
+            let from_rank = from.rank() as i8;
+            let from_file = from.file();
+            let mut count = 0;
+
+            // Forward moves
+            let one_forward_rank = from_rank + direction;
+            if (0..8).contains(&one_forward_rank) {
+                if let Ok(one_forward) = Square::new(one_forward_rank as u8, from_file) {
+                    if self.is_empty(one_forward) {
+                        count += 1;
+
+                        // Double push from starting position
+                        if from.rank() == start_rank {
+                            let two_forward_rank = from_rank + 2 * direction;
+                            if (0..8).contains(&two_forward_rank) {
+                                if let Ok(two_forward) =
+                                    Square::new(two_forward_rank as u8, from_file)
+                                {
+                                    if self.is_empty(two_forward) {
+                                        count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Captures
+            for &file_offset in &[-1i8, 1i8] {
+                let capture_file = from_file as i8 + file_offset;
+                let capture_rank = from_rank + direction;
+
+                if (0..8).contains(&capture_file) && (0..8).contains(&capture_rank) {
+                    if let Ok(capture_square) = Square::new(capture_rank as u8, capture_file as u8)
+                    {
+                        if self.is_occupied_by(capture_square, color.opposite()) {
+                            count += 1;
+                        }
+
+                        // En passant
+                        if let Some(ep_square) = self.en_passant {
+                            if capture_square == ep_square {
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+            count
+        } else {
+            0
+        }
+    }
+
+    /// Count sliding piece moves (bishop, rook, queen)
+    fn count_sliding_moves(&self, from: Square, directions: &[(i8, i8)]) -> i32 {
+        let from_rank = from.rank() as i8;
+        let from_file = from.file() as i8;
+        let mut count = 0;
+
+        if let Some(piece_at_from) = self.piece_at(from) {
+            let piece_color = piece_at_from.color;
+
+            for (rank_dir, file_dir) in directions.iter() {
+                let mut rank = from_rank;
+                let mut file = from_file;
+
+                loop {
+                    rank += rank_dir;
+                    file += file_dir;
+
+                    if !(0..8).contains(&rank) || !(0..8).contains(&file) {
+                        break;
+                    }
+
+                    if let Ok(to_square) = Square::new(rank as u8, file as u8) {
+                        if self.is_empty(to_square) {
+                            count += 1;
+                        } else if self.is_occupied_by(to_square, piece_color.opposite()) {
+                            count += 1;
+                            break; // Can't continue past capture
+                        } else {
+                            break; // Own piece blocks further movement
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        count
+    }
+
     fn evaluate_material_and_position(&self) -> i32 {
         let mut score = 0;
 
@@ -105,6 +355,10 @@ impl Position {
         // Add king safety evaluation
         let king_safety_score = self.evaluate_king_safety();
         score += king_safety_score.interpolate(phase_factor);
+
+        // Add piece mobility evaluation
+        let mobility_score = self.evaluate_piece_mobility();
+        score += mobility_score.interpolate(phase_factor);
 
         score
     }
@@ -340,7 +594,7 @@ impl Position {
     }
 
     /// Calculate game phase factor (1.0 = opening, 0.0 = endgame)
-    fn get_game_phase_factor(&self) -> f32 {
+    pub fn get_game_phase_factor(&self) -> f32 {
         const MAX_PHASE_MATERIAL: i32 = 2 * (4 * 320 + 2 * 500 + 900); // Knights, Bishops, Rooks, Queen per side
         let current_material = self.get_non_pawn_material();
         (current_material as f32 / MAX_PHASE_MATERIAL as f32).min(1.0)
