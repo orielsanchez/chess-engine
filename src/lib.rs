@@ -7,6 +7,7 @@ pub mod position;
 pub mod search;
 pub mod transposition;
 pub mod types;
+pub mod uci;
 
 pub use board::*;
 pub use fen::*;
