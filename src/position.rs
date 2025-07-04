@@ -3,6 +3,24 @@ use crate::transposition::ZOBRIST_HASHER;
 use crate::types::*;
 use std::fmt;
 
+/// Convert a piece to its Unicode chess symbol
+fn piece_to_unicode_symbol(piece: Piece) -> &'static str {
+    match (piece.color, piece.piece_type) {
+        (Color::White, PieceType::King) => "♔",
+        (Color::White, PieceType::Queen) => "♕",
+        (Color::White, PieceType::Rook) => "♖",
+        (Color::White, PieceType::Bishop) => "♗",
+        (Color::White, PieceType::Knight) => "♘",
+        (Color::White, PieceType::Pawn) => "♙",
+        (Color::Black, PieceType::King) => "♚",
+        (Color::Black, PieceType::Queen) => "♛",
+        (Color::Black, PieceType::Rook) => "♜",
+        (Color::Black, PieceType::Bishop) => "♝",
+        (Color::Black, PieceType::Knight) => "♞",
+        (Color::Black, PieceType::Pawn) => "♟",
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum PositionError {
     BoardError(BoardError),
@@ -345,6 +363,39 @@ impl Position {
     /// Recompute zobrist hash from scratch (for verification)
     pub fn recompute_hash(&mut self) {
         self.zobrist_hash = ZOBRIST_HASHER.compute_hash(self).unwrap_or(0);
+    }
+
+    /// Generate ASCII representation of the board
+    pub fn to_ascii_board(&self) -> String {
+        let mut result = String::new();
+
+        // Header with file coordinates
+        result.push_str("  a b c d e f g h\n");
+
+        // Ranks 8 to 1 (top to bottom)
+        for rank in (0..8).rev() {
+            result.push_str(&format!("{} ", rank + 1));
+
+            for file in 0..8 {
+                if let Ok(square) = Square::new(rank, file) {
+                    let symbol = match self.board.piece_at(square) {
+                        Some(piece) => piece_to_unicode_symbol(piece),
+                        None => "·",
+                    };
+                    result.push_str(symbol);
+                    if file < 7 {
+                        result.push(' ');
+                    }
+                }
+            }
+
+            result.push_str(&format!(" {}\n", rank + 1));
+        }
+
+        // Footer with file coordinates
+        result.push_str("  a b c d e f g h");
+
+        result
     }
 }
 

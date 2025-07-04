@@ -8,6 +8,7 @@ pub mod pgn;
 pub mod position;
 pub mod search;
 pub mod transposition;
+pub mod tui;
 pub mod types;
 pub mod uci;
 
