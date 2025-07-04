@@ -1480,7 +1480,7 @@ impl MenuWidget {
             [3] Analysis Mode\n\
             [4] Help\n\
             [5] Quit\n\n\
-            Press number key or ESC to cancel"
+            Press number key or ESC to close"
             .to_string()
     }
 }

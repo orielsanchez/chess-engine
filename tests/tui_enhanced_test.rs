@@ -316,7 +316,7 @@ mod tui_enhanced_tests {
         let clock_widget = app.create_clock_widget();
         assert_eq!(clock_widget.content(), "No active game");
 
-        // 2. Open menu with 'M' key simulation
+        // 2. Open menu with 'ESC' key simulation
         app.set_state(TuiState::Menu);
         assert_eq!(app.state(), &TuiState::Menu);
 

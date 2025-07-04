@@ -56,10 +56,11 @@ fn run_app<B: ratatui::backend::Backend>(
                             TuiState::PuzzleSolving => app.set_state(TuiState::Command),
                         }
                     }
-                    KeyCode::Char('m') => {
-                        // Open menu if not already in menu
-                        if !matches!(app.state(), TuiState::Menu) {
-                            app.set_state(TuiState::Menu);
+                    KeyCode::Esc => {
+                        // Toggle menu - open if not in menu, close if in menu
+                        match app.state() {
+                            TuiState::Menu => app.set_state(TuiState::Command),
+                            _ => app.set_state(TuiState::Menu),
                         }
                     }
                     KeyCode::Char('1') => {
@@ -85,11 +86,6 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char('5') => {
                         if matches!(app.state(), TuiState::Menu) && app.handle_menu_quit() {
                             return Ok(());
-                        }
-                    }
-                    KeyCode::Esc => {
-                        if matches!(app.state(), TuiState::Menu) {
-                            app.set_state(TuiState::Command);
                         }
                     }
                     KeyCode::Enter => {
