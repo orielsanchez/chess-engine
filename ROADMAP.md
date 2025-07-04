@@ -2,6 +2,71 @@
 
 ## Recent Achievements (Latest First)
 
+### Interactive CLI Enhancement Roadmap (July 2025)
+**Priority: High** - Transform basic CLI into professional chess analysis interface
+
+#### Phase 1: Terminal UI (TUI) Foundation
+- **Visual ASCII board display** with piece rendering and position coordinates
+- **Split-pane interface** using ratatui framework (board + analysis + move history)
+- **Real-time position updates** with highlighted last move and threats
+- **Mouse support** for piece selection and move input
+- **Keyboard navigation** with vim-style controls
+
+#### Phase 2: Enhanced Command Interface  
+- **Tab completion** for commands and legal moves
+- **Command history** with up/down arrow navigation
+- **Smart aliases**: `a` (analyze), `m e4` (move), `l` (legal)
+- **Natural move input**: Support `Nf3`, `O-O`, `e4` alongside coordinate notation
+- **Multi-word parsing**: Enhanced command recognition and validation
+
+#### Phase 3: Rich Analysis Display
+- **Comprehensive evaluation panel** with detailed breakdown:
+  - Evaluation score with advantage indicator (+0.25 = slight advantage)
+  - Principal variation with move sequence (1.e4 d5 2.exd5 Qxd5)
+  - Search statistics (depth, nodes, time, nodes per second)
+  - Multiple best moves (Multi-PV analysis)
+- **Performance dashboard** with real-time metrics
+- **Opening book integration** with opening name and theory display
+
+#### Phase 4: Interactive Features
+- **Position visualization enhancements**:
+  - Piece attack visualization (show attacks, pins, forks)
+  - Threat detection and highlighting
+  - Check/checkmate/stalemate visual indicators
+- **Game modes**:
+  - Play vs engine with difficulty levels
+  - Puzzle solving mode with tactical problems
+  - Analysis mode for position exploration
+- **PGN integration**:
+  - Load/save games with `load game.pgn`
+  - Replay games with move-by-move analysis
+  - Export analyzed positions to PGN with comments
+
+#### Phase 5: Advanced Analysis Tools
+- **Engine comparison** (multiple engine analysis)
+- **Time control simulation** for tournament preparation  
+- **Endgame tablebase lookup** for perfect endgame play
+- **Position database** with similar position search
+- **Training modes** with spaced repetition for improvement
+
+**Dependencies to Add:**
+```toml
+ratatui = "0.26"        # Modern TUI framework
+crossterm = "0.27"      # Terminal control
+rustyline = "13.0"      # Command line editing with history
+clap = "4.4"           # Enhanced CLI argument parsing
+serde = "1.0"          # Configuration and data serialization
+```
+
+**Technical Implementation Goals:**
+- Maintain existing CLI compatibility for scripting
+- Add TUI mode with `--tui` flag for interactive sessions
+- Performance target: <50ms response time for all commands
+- Memory efficient: <100MB RAM usage for full TUI interface
+- Cross-platform compatibility (Windows, macOS, Linux)
+
+---
+
 ### Interactive Analysis Mode Implementation (July 2025)
 - **Complete TDD implementation** of interactive chess analysis interface  
 - **Direct position analysis** beyond UCI protocol for enhanced user experience
@@ -115,7 +180,19 @@
   - [x] FEN position setup and management
   - [x] User-friendly command interface
   - [x] Production CLI binary (cargo run --bin interactive)
-- [ ] PGN import/export
+- [ ] Enhanced Interactive CLI (TUI implementation)
+  - [ ] Phase 1: Visual ASCII board display with ratatui framework
+  - [ ] Phase 2: Tab completion and command history
+  - [ ] Phase 3: Rich analysis display with statistics
+  - [ ] Phase 4: Game modes and PGN integration
+  - [ ] Phase 5: Advanced analysis tools and training modes
+- [x] PGN import/export (complete implementation)
+  - [x] PGN parsing from string format with comprehensive error handling
+  - [x] Metadata extraction (Event, Site, Date, White, Black, Result) 
+  - [x] Move sequence parsing with standard algebraic notation (SAN)
+  - [x] Position integration with round-trip support
+  - [x] 16 comprehensive tests covering all PGN scenarios and edge cases
+  - [ ] File I/O integration with interactive CLI (load/save commands)
 - [ ] Opening book support
 - [ ] Game replay functionality
 
