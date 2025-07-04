@@ -7,10 +7,25 @@ use std::collections::VecDeque;
 pub enum InteractiveCommand {
     Analyze,
     Legal,
-    Move { algebraic_move: String },
-    Position { fen: String },
+    Move {
+        algebraic_move: String,
+    },
+    Position {
+        fen: String,
+    },
     Undo,
     Help,
+    // Phase 4: Interactive Features
+    Play {
+        player_color: String,
+        difficulty: u8,
+    },
+    Puzzle {
+        puzzle_id: String,
+    },
+    Threats,
+    Hint,
+    Clock,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +52,26 @@ pub enum InteractiveResponse {
     },
     Help {
         commands: String,
+    },
+    // Phase 4: Interactive Features
+    GameStarted {
+        mode: String,
+        player_color: String,
+    },
+    PuzzleLoaded {
+        objective: String,
+        puzzle_id: String,
+    },
+    ThreatsFound {
+        threat_count: usize,
+        threats: Vec<String>,
+    },
+    PuzzleHint {
+        hint: String,
+    },
+    GameClock {
+        white_time_ms: u64,
+        black_time_ms: u64,
     },
 }
 
@@ -85,6 +120,40 @@ impl InteractiveEngine {
             }
             "undo" => Ok(InteractiveCommand::Undo),
             "help" => Ok(InteractiveCommand::Help),
+            // Phase 4: Interactive Features
+            "play" => {
+                if parts.len() != 3 {
+                    return Err(
+                        "Play command requires color and difficulty: play <white|black> <1-10>"
+                            .to_string(),
+                    );
+                }
+                let player_color = parts[1].to_string();
+                let difficulty = parts[2]
+                    .parse::<u8>()
+                    .map_err(|_| "Difficulty must be a number between 1-10".to_string())?;
+                if !(1..=10).contains(&difficulty) {
+                    return Err("Difficulty must be between 1 and 10".to_string());
+                }
+                if player_color != "white" && player_color != "black" {
+                    return Err("Color must be 'white' or 'black'".to_string());
+                }
+                Ok(InteractiveCommand::Play {
+                    player_color,
+                    difficulty,
+                })
+            }
+            "puzzle" => {
+                if parts.len() != 2 {
+                    return Err("Puzzle command requires puzzle ID: puzzle <id>".to_string());
+                }
+                Ok(InteractiveCommand::Puzzle {
+                    puzzle_id: parts[1].to_string(),
+                })
+            }
+            "threats" => Ok(InteractiveCommand::Threats),
+            "hint" => Ok(InteractiveCommand::Hint),
+            "clock" => Ok(InteractiveCommand::Clock),
             _ => Err(format!("Unknown command: {}", parts[0])),
         }
     }
@@ -100,6 +169,15 @@ impl InteractiveEngine {
             InteractiveCommand::Position { fen } => self.handle_position(&fen),
             InteractiveCommand::Undo => self.handle_undo(),
             InteractiveCommand::Help => self.handle_help(),
+            // Phase 4: Interactive Features
+            InteractiveCommand::Play {
+                player_color,
+                difficulty,
+            } => self.handle_play(&player_color, difficulty),
+            InteractiveCommand::Puzzle { puzzle_id } => self.handle_puzzle(&puzzle_id),
+            InteractiveCommand::Threats => self.handle_threats(),
+            InteractiveCommand::Hint => self.handle_hint(),
+            InteractiveCommand::Clock => self.handle_clock(),
         }
     }
 
@@ -211,8 +289,55 @@ impl InteractiveEngine {
     }
 
     fn handle_help(&self) -> Result<InteractiveResponse, String> {
-        let commands = "analyze legal move position undo help".to_string();
+        let commands =
+            "analyze legal move position undo help play puzzle threats hint clock".to_string();
         Ok(InteractiveResponse::Help { commands })
+    }
+
+    // Phase 4: Interactive Feature Handlers
+    fn handle_play(
+        &self,
+        player_color: &str,
+        difficulty: u8,
+    ) -> Result<InteractiveResponse, String> {
+        // Note: This will be bridged to TuiApp later
+        Ok(InteractiveResponse::GameStarted {
+            mode: format!("Playing vs Engine (difficulty {})", difficulty),
+            player_color: player_color.to_string(),
+        })
+    }
+
+    fn handle_puzzle(&self, puzzle_id: &str) -> Result<InteractiveResponse, String> {
+        // Note: This will be bridged to TuiApp later
+        Ok(InteractiveResponse::PuzzleLoaded {
+            objective: "White to play and mate in 2".to_string(),
+            puzzle_id: puzzle_id.to_string(),
+        })
+    }
+
+    fn handle_threats(&self) -> Result<InteractiveResponse, String> {
+        // Note: This will be bridged to TuiApp later
+        // For now, return placeholder threat data
+        let threats = vec!["e4:d5".to_string(), "d1:h5".to_string()];
+        Ok(InteractiveResponse::ThreatsFound {
+            threat_count: threats.len(),
+            threats,
+        })
+    }
+
+    fn handle_hint(&self) -> Result<InteractiveResponse, String> {
+        // Note: This will be bridged to TuiApp later
+        Ok(InteractiveResponse::PuzzleHint {
+            hint: "Look for a forcing move that leads to mate".to_string(),
+        })
+    }
+
+    fn handle_clock(&self) -> Result<InteractiveResponse, String> {
+        // Note: This will be bridged to TuiApp later
+        Ok(InteractiveResponse::GameClock {
+            white_time_ms: 300000, // 5 minutes
+            black_time_ms: 300000, // 5 minutes
+        })
     }
 
     pub fn format_response(response: &InteractiveResponse) -> String {
@@ -264,6 +389,42 @@ impl InteractiveEngine {
             }
             InteractiveResponse::Help { commands } => {
                 format!("Available commands: {}", commands)
+            }
+            // Phase 4: Interactive Feature Responses
+            InteractiveResponse::GameStarted { mode, player_color } => {
+                format!("Game started: {} as {}", mode, player_color)
+            }
+            InteractiveResponse::PuzzleLoaded {
+                objective,
+                puzzle_id,
+            } => {
+                format!("Puzzle loaded: {}\nObjective: {}", puzzle_id, objective)
+            }
+            InteractiveResponse::ThreatsFound {
+                threat_count,
+                threats,
+            } => {
+                if *threat_count == 0 {
+                    "No threats found in current position".to_string()
+                } else {
+                    format!("Threats found ({}): {}", threat_count, threats.join(", "))
+                }
+            }
+            InteractiveResponse::PuzzleHint { hint } => {
+                format!("Hint: {}", hint)
+            }
+            InteractiveResponse::GameClock {
+                white_time_ms,
+                black_time_ms,
+            } => {
+                let white_minutes = white_time_ms / 60000;
+                let white_seconds = (white_time_ms % 60000) / 1000;
+                let black_minutes = black_time_ms / 60000;
+                let black_seconds = (black_time_ms % 60000) / 1000;
+                format!(
+                    "Game Clock - White: {}:{:02} | Black: {}:{:02}",
+                    white_minutes, white_seconds, black_minutes, black_seconds
+                )
             }
         }
     }

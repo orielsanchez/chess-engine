@@ -1,4 +1,4 @@
-use crate::interactive::InteractiveEngine;
+use crate::interactive::{InteractiveCommand, InteractiveEngine, InteractiveResponse};
 use crate::moves::Move;
 use crate::position::Position;
 use crate::search::SearchResult;
@@ -83,6 +83,12 @@ impl CommandCompletion {
                 "position".to_string(),
                 "undo".to_string(),
                 "help".to_string(),
+                // Phase 4: Interactive Features
+                "play".to_string(),
+                "puzzle".to_string(),
+                "threats".to_string(),
+                "hint".to_string(),
+                "clock".to_string(),
             ],
             aliases: vec![
                 ("a".to_string(), "analyze".to_string()),
@@ -434,13 +440,84 @@ impl TuiApp {
         let expanded_command = self.completion.expand_alias(&self.command_buffer);
 
         let command = InteractiveEngine::parse_command(&expanded_command)?;
-        let response = self.engine.handle_command(command)?;
+        let response = self.handle_command_with_phase4(command)?;
         let formatted_response = InteractiveEngine::format_response(&response);
 
         self.last_response = Some(formatted_response);
         self.clear_command_buffer();
 
         Ok(())
+    }
+
+    // Bridge method to handle Phase 4 commands with TuiApp methods
+    fn handle_command_with_phase4(
+        &mut self,
+        command: InteractiveCommand,
+    ) -> Result<InteractiveResponse, String> {
+        use InteractiveCommand::*;
+
+        match command {
+            // Phase 4: Interactive Features - Handle with TuiApp methods
+            Play {
+                player_color,
+                difficulty,
+            } => {
+                let color = match player_color.as_str() {
+                    "white" => Color::White,
+                    "black" => Color::Black,
+                    _ => return Err("Invalid color".to_string()),
+                };
+                self.start_engine_game(color, difficulty);
+                Ok(InteractiveResponse::GameStarted {
+                    mode: format!("Playing vs Engine (difficulty {})", difficulty),
+                    player_color,
+                })
+            }
+            Puzzle { puzzle_id } => {
+                self.load_puzzle(&puzzle_id)?;
+                let objective = if let Some(puzzle_info) = self.get_puzzle_info() {
+                    puzzle_info.objective.clone()
+                } else {
+                    "Unknown objective".to_string()
+                };
+                Ok(InteractiveResponse::PuzzleLoaded {
+                    objective,
+                    puzzle_id,
+                })
+            }
+            Threats => {
+                let threats = self.get_threats_for_position();
+                let threat_strings: Vec<String> = threats
+                    .iter()
+                    .map(|t| format!("{}:{}", t.attacking_piece_square, t.target_square))
+                    .collect();
+                Ok(InteractiveResponse::ThreatsFound {
+                    threat_count: threats.len(),
+                    threats: threat_strings,
+                })
+            }
+            Hint => {
+                let hint = self
+                    .get_puzzle_hint()
+                    .unwrap_or_else(|| "No hint available".to_string());
+                Ok(InteractiveResponse::PuzzleHint { hint })
+            }
+            Clock => {
+                if let Some((white_time, black_time)) = self.get_game_clock() {
+                    Ok(InteractiveResponse::GameClock {
+                        white_time_ms: white_time,
+                        black_time_ms: black_time,
+                    })
+                } else {
+                    Ok(InteractiveResponse::GameClock {
+                        white_time_ms: 0,
+                        black_time_ms: 0,
+                    })
+                }
+            }
+            // For non-Phase 4 commands, delegate to InteractiveEngine
+            _ => self.engine.handle_command(command),
+        }
     }
 
     pub fn create_layout(&self, area: Rect) -> Vec<Rect> {
@@ -690,6 +767,18 @@ impl TuiApp {
     // Phase 4: Game Clock Management
     pub fn get_game_clock(&self) -> Option<(u64, u64)> {
         self.game_state.game_clock
+    }
+
+    // Test helper methods for Phase 4 integration
+    pub fn handle_command_with_phase4_test(
+        &mut self,
+        command: InteractiveCommand,
+    ) -> Result<InteractiveResponse, String> {
+        self.handle_command_with_phase4(command)
+    }
+
+    pub fn get_game_state(&self) -> &GameState {
+        &self.game_state
     }
 
     pub fn update_game_clock(&mut self) {
