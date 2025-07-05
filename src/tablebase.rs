@@ -149,6 +149,12 @@ pub struct MockTablebase {
     data: HashMap<String, TablebaseResult>,
 }
 
+impl Default for MockTablebase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockTablebase {
     pub fn new() -> Self {
         let mut data = HashMap::new();

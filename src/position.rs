@@ -421,11 +421,7 @@ impl Position {
 
         // Use mock tablebase for now
         let tablebase = crate::tablebase::MockTablebase::new();
-        if let Ok(result) = tablebase.probe(self) {
-            Some(result)
-        } else {
-            None
-        }
+        tablebase.probe(self).ok()
     }
 
     /// Enable or disable tablebase lookup (for testing)
@@ -473,6 +469,12 @@ pub struct MockSearchResult {
 
 #[derive(Debug)]
 pub struct MockMove;
+
+impl Default for MockMove {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl MockMove {
     pub fn new() -> Self {

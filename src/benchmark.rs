@@ -186,13 +186,13 @@ pub fn benchmark_multiple_positions(
         results.push(result);
     }
 
-    let average_pseudo_legal_moves_per_second = if results.len() > 0 {
+    let average_pseudo_legal_moves_per_second = if !results.is_empty() {
         total_pseudo_legal_moves_per_second / results.len() as f64
     } else {
         0.0
     };
 
-    let average_legal_moves_per_second = if results.len() > 0 {
+    let average_legal_moves_per_second = if !results.is_empty() {
         total_legal_moves_per_second / results.len() as f64
     } else {
         0.0
