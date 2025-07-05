@@ -396,6 +396,20 @@ impl SearchEngine {
         ordered_moves: &[Move],
         depth: u8,
     ) -> Result<(Move, i32), SearchError> {
+        // Check tablebase at root level for immediate result
+        if position.is_tablebase_position() {
+            if let Some(tablebase_result) = position.probe_tablebase() {
+                use crate::tablebase::TablebaseResult;
+                let score = match tablebase_result {
+                    TablebaseResult::Win(dtm) => 20000 - (dtm as i32 * 10),
+                    TablebaseResult::Loss(dtm) => -20000 + (dtm as i32 * 10),
+                    TablebaseResult::Draw => 0,
+                };
+                // Return the tablebase move with tablebase score
+                return Ok((ordered_moves[0], score));
+            }
+        }
+        
         let mut best_move = ordered_moves[0];
         let mut best_score = i32::MIN;
         let mut alpha = i32::MIN;
@@ -793,6 +807,21 @@ impl SearchEngine {
         if self.nodes_evaluated % 1000 == 0 && self.should_stop() {
             // Return current evaluation if we need to stop
             return Ok(position.evaluate());
+        }
+
+        // Tablebase integration: Check for definitive tablebase result
+        if position.is_tablebase_position() {
+            if let Some(tablebase_result) = position.probe_tablebase() {
+                // Return tablebase result immediately for early termination
+                use crate::tablebase::TablebaseResult;
+                let score = match tablebase_result {
+                    TablebaseResult::Win(dtm) => 20000 - (dtm as i32 * 10),
+                    TablebaseResult::Loss(dtm) => -20000 + (dtm as i32 * 10),
+                    TablebaseResult::Draw => 0,
+                };
+                // Use the score directly from tablebase - it's already adjusted for side to move
+                return Ok(score);
+            }
         }
 
         // Transposition table lookup for move ordering
