@@ -233,8 +233,9 @@ impl MockTablebase {
 
         // Add some basic known results
         data.insert("KQvK".to_string(), TablebaseResult::Win(10));
-        data.insert("KRvK".to_string(), TablebaseResult::Draw);
+        data.insert("KRvK".to_string(), TablebaseResult::Win(25)); // KRvK is usually winning
         data.insert("KPvK".to_string(), TablebaseResult::Win(15));
+        data.insert("BKvK".to_string(), TablebaseResult::Draw); // KBvK can be drawn (sorted: BKvK)
 
         Self { data }
     }
@@ -249,8 +250,9 @@ impl Tablebase for MockTablebase {
             // Determine who has the advantage in this material configuration
             let white_stronger = match material_sig {
                 "KQvK" => position.has_piece(Color::White, crate::types::PieceType::Queen),
-                "KRvK" => false, // Draw
+                "KRvK" => position.has_piece(Color::White, crate::types::PieceType::Rook), // Check who has the rook
                 "KPvK" => position.has_piece(Color::White, crate::types::PieceType::Pawn),
+                "BKvK" => position.has_piece(Color::White, crate::types::PieceType::Bishop), // Check who has the bishop (sorted: BKvK)
                 _ => false,
             };
 

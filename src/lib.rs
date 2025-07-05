@@ -1,5 +1,6 @@
 pub mod benchmark;
 pub mod board;
+pub mod distance_to_mate;
 pub mod eval;
 pub mod fen;
 pub mod interactive;

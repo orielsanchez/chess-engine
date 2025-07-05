@@ -409,7 +409,7 @@ impl SearchEngine {
                 return Ok((ordered_moves[0], score));
             }
         }
-        
+
         let mut best_move = ordered_moves[0];
         let mut best_score = i32::MIN;
         let mut alpha = i32::MIN;
