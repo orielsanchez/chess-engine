@@ -453,8 +453,8 @@ pub mod syzygy {
             let loaded = self.loaded_tables.lock().unwrap();
             let tablebase_file = loaded.get(material_sig).ok_or(TablebaseError::NotFound)?;
 
-            // Parse the real Syzygy header (28 bytes)
-            if tablebase_file.data.len() < 28 {
+            // Parse the real Syzygy header (32 bytes)
+            if tablebase_file.data.len() < 32 {
                 return Err(TablebaseError::SyzygyError(SyzygyError::InvalidFileFormat(
                     "File too small for Syzygy header".to_string(),
                 )));
@@ -498,33 +498,33 @@ pub mod syzygy {
             &self,
             tablebase_file: &TablebaseFile,
         ) -> Result<TablebaseResult, TablebaseError> {
-            // Skip info field (bytes 8-11) for now
+            // Skip info field (bytes 8-11) and reserved field (bytes 12-15) for now
 
-            // Read table sizes (bytes 12-19 and 20-27, little-endian u64)
+            // Read table sizes (bytes 16-23 and 24-31, little-endian u64)
             let _num_positions_side1 = u64::from_le_bytes([
-                tablebase_file.data[12],
-                tablebase_file.data[13],
-                tablebase_file.data[14],
-                tablebase_file.data[15],
                 tablebase_file.data[16],
                 tablebase_file.data[17],
                 tablebase_file.data[18],
                 tablebase_file.data[19],
-            ]);
-
-            let _num_positions_side2 = u64::from_le_bytes([
                 tablebase_file.data[20],
                 tablebase_file.data[21],
                 tablebase_file.data[22],
                 tablebase_file.data[23],
+            ]);
+
+            let _num_positions_side2 = u64::from_le_bytes([
                 tablebase_file.data[24],
                 tablebase_file.data[25],
                 tablebase_file.data[26],
                 tablebase_file.data[27],
+                tablebase_file.data[28],
+                tablebase_file.data[29],
+                tablebase_file.data[30],
+                tablebase_file.data[31],
             ]);
 
-            // WDL data starts at byte 28
-            if tablebase_file.data.len() <= 28 {
+            // WDL data starts at byte 32
+            if tablebase_file.data.len() <= 32 {
                 return Err(TablebaseError::SyzygyError(SyzygyError::InvalidFileFormat(
                     "No WDL data found".to_string(),
                 )));
@@ -532,7 +532,7 @@ pub mod syzygy {
 
             // For minimal implementation: just read first WDL value (first position)
             // Each position is 2 bits, 4 positions per byte
-            let wdl_byte = tablebase_file.data[28];
+            let wdl_byte = tablebase_file.data[32];
             let first_wdl_value = wdl_byte & 0x03; // Extract first 2 bits
 
             // Convert WDL value to TablebaseResult
@@ -551,27 +551,27 @@ pub mod syzygy {
             tablebase_file: &TablebaseFile,
             nblocks: u32,
         ) -> Result<TablebaseResult, TablebaseError> {
-            // Read table sizes (bytes 12-19 and 20-27, little-endian u64)
+            // Read table sizes (bytes 16-23 and 24-31, little-endian u64)
             let _num_positions_side1 = u64::from_le_bytes([
-                tablebase_file.data[12],
-                tablebase_file.data[13],
-                tablebase_file.data[14],
-                tablebase_file.data[15],
                 tablebase_file.data[16],
                 tablebase_file.data[17],
                 tablebase_file.data[18],
                 tablebase_file.data[19],
-            ]);
-
-            let _num_positions_side2 = u64::from_le_bytes([
                 tablebase_file.data[20],
                 tablebase_file.data[21],
                 tablebase_file.data[22],
                 tablebase_file.data[23],
+            ]);
+
+            let _num_positions_side2 = u64::from_le_bytes([
                 tablebase_file.data[24],
                 tablebase_file.data[25],
                 tablebase_file.data[26],
                 tablebase_file.data[27],
+                tablebase_file.data[28],
+                tablebase_file.data[29],
+                tablebase_file.data[30],
+                tablebase_file.data[31],
             ]);
 
             // Parse block index table starting after the header

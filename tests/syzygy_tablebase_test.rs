@@ -19,7 +19,7 @@ mod syzygy_tests {
     #[test]
     fn test_syzygy_tablebase_creation_with_path() {
         // RED: Test that we can create a Syzygy tablebase pointed at a directory
-        let tablebase_path = "/tmp/syzygy_test";
+        let tablebase_path = "/tmp/syzygy_creation_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create at least one tablebase file so is_initialized() returns true
@@ -37,7 +37,7 @@ mod syzygy_tests {
     #[test]
     fn test_syzygy_file_discovery() {
         // RED: Test automatic discovery of .rtbw and .rtbz files
-        let tablebase_path = "/tmp/syzygy_test";
+        let tablebase_path = "/tmp/syzygy_discovery_test";
         std::fs::create_dir_all(tablebase_path).ok();
 
         // Create mock tablebase files for testing
@@ -516,8 +516,12 @@ mod syzygy_tests {
         // Size for side 2 (8 bytes)
         data.extend_from_slice(&4u64.to_le_bytes());
 
-        // WDL data: minimal mock data (starting at byte 32)
-        data.extend_from_slice(&[0x01, 0x02, 0x00, 0x01]); // Win, Loss, Draw, Win
+        // WDL data: packed 2 bits per position, 4 positions per byte (starting at byte 32)
+        // First byte: 4 positions, all wins (value=2, binary=10)
+        // Packed as: 10 10 10 10 = 0b10101010 = 0xAA
+        data.push(0xAA); // All 4 positions are wins
+        // Second byte: 4 more positions, mixed results
+        data.push(0x4E); // Win(10), Draw(01), Loss(00), Win(10) = 0b10011010
 
         std::fs::write(file_path, data).unwrap();
     }
