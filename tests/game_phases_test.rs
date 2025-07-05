@@ -8,7 +8,6 @@ use chess_engine::position::Position;
 /// - Late Middlegame: Material 25-75% of maximum, tactical complexity
 /// - Endgame: Material < 25% of maximum, king activity important
 /// - Pawn Endgame: Only pawns + kings, precise calculation needed
-
 #[cfg(test)]
 mod tests {
     use super::*;
