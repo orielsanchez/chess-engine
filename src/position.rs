@@ -47,7 +47,7 @@ impl From<BoardError> for PositionError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Position {
     pub board: Board,
     pub side_to_move: Color,
@@ -56,6 +56,22 @@ pub struct Position {
     pub halfmove_clock: u8,
     pub fullmove_number: u16,
     pub zobrist_hash: u64,
+    tablebase: Option<Box<dyn Tablebase>>,
+}
+
+impl Clone for Position {
+    fn clone(&self) -> Self {
+        Self {
+            board: self.board.clone(),
+            side_to_move: self.side_to_move,
+            castling_rights: self.castling_rights,
+            en_passant: self.en_passant,
+            halfmove_clock: self.halfmove_clock,
+            fullmove_number: self.fullmove_number,
+            zobrist_hash: self.zobrist_hash,
+            tablebase: None, // Don't clone tablebase - will be set separately if needed
+        }
+    }
 }
 
 impl PartialEq for Position {
@@ -66,7 +82,7 @@ impl PartialEq for Position {
             && self.en_passant == other.en_passant
             && self.halfmove_clock == other.halfmove_clock
             && self.fullmove_number == other.fullmove_number
-        // Explicitly exclude zobrist_hash - it's derived from other fields
+        // Explicitly exclude zobrist_hash and tablebase - they're not part of position equality
     }
 }
 
@@ -80,6 +96,7 @@ impl Position {
             halfmove_clock: 0,
             fullmove_number: 1,
             zobrist_hash: 0, // Temporary
+            tablebase: None,
         };
         position.zobrist_hash = ZOBRIST_HASHER.compute_hash(&position).unwrap_or(0);
         position
@@ -94,6 +111,7 @@ impl Position {
             halfmove_clock: 0,
             fullmove_number: 1,
             zobrist_hash: 0, // Temporary
+            tablebase: None,
         };
         position.zobrist_hash = ZOBRIST_HASHER.compute_hash(&position).unwrap_or(0);
         Ok(position)
@@ -436,19 +454,25 @@ impl Position {
         TABLEBASE_ENABLED.load(Ordering::Relaxed)
     }
 
+    /// Set the tablebase for this position
+    pub fn set_tablebase(&mut self, tablebase: Box<dyn Tablebase>) {
+        self.tablebase = Some(tablebase);
+    }
+
     /// Find best move using tablebase knowledge (mock implementation)
     pub fn find_best_move_with_tablebase(&self, _time_ms: u64) -> MockSearchResult {
         // Mock implementation for testing
-        let score = if let Some(tb_result) = self.probe_tablebase() {
-            tb_result.to_search_score()
+        let (score, tablebase_hits) = if let Some(tb_result) = self.probe_tablebase() {
+            (tb_result.to_search_score(), 1)
         } else {
-            self.evaluate()
+            (self.evaluate(), 0)
         };
 
         MockSearchResult {
             best_move: Some(MockMove::new()),
             score,
             depth: 15,
+            tablebase_hits,
         }
     }
 }
@@ -465,6 +489,7 @@ pub struct MockSearchResult {
     pub best_move: Option<MockMove>,
     pub score: i32,
     pub depth: u8,
+    pub tablebase_hits: u64,
 }
 
 #[derive(Debug)]

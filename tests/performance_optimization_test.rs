@@ -30,11 +30,16 @@ fn test_rook_endgame_performance_target() {
     println!("Rook Endgame Performance: {} moves/sec", moves_per_second);
 
     // Debug vs Release: 280K debug, 400K+ release target
-    let target = if cfg!(debug_assertions) { 200_000 } else { 400_000 };
+    let target = if cfg!(debug_assertions) {
+        200_000
+    } else {
+        400_000
+    };
     assert!(
         moves_per_second >= target,
         "Rook endgame performance {} moves/sec below target {}+",
-        moves_per_second, target
+        moves_per_second,
+        target
     );
 }
 
@@ -160,7 +165,8 @@ fn test_efficiency_ratio_improvement() {
     assert!(
         efficiency_ratio >= target,
         "Efficiency ratio {:.3} below baseline {:.2}+",
-        efficiency_ratio, target
+        efficiency_ratio,
+        target
     );
 }
 
@@ -212,12 +218,13 @@ fn test_performance_consistency() {
 
     println!("Performance variation: {:.1}x (max/min)", variation_ratio);
 
-    // Debug vs Release: 10x debug, 5x release variation  
+    // Debug vs Release: 10x debug, 5x release variation
     let target = if cfg!(debug_assertions) { 10.0 } else { 6.0 };
     assert!(
         variation_ratio <= target,
         "Performance variation {:.1}x exceeds baseline {:.1}x",
-        variation_ratio, target
+        variation_ratio,
+        target
     );
 }
 

@@ -23,7 +23,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create at least one tablebase file so is_initialized() returns true
-        std::fs::write(format!("{}/KQvK.rtbw", tablebase_path), b"mock_data").unwrap();
+        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", tablebase_path));
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
 
@@ -41,9 +41,9 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).ok();
 
         // Create mock tablebase files for testing
-        std::fs::write(format!("{}/KQvK.rtbw", tablebase_path), b"mock_data").unwrap();
-        std::fs::write(format!("{}/KRvK.rtbw", tablebase_path), b"mock_data").unwrap();
-        std::fs::write(format!("{}/KPvK.rtbz", tablebase_path), b"mock_data").unwrap();
+        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", tablebase_path));
+        create_uncompressed_syzygy_file(&format!("{}/KRvK.rtbw", tablebase_path));
+        create_uncompressed_syzygy_file(&format!("{}/KPvK.rtbz", tablebase_path));
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
 
@@ -279,33 +279,15 @@ mod syzygy_tests {
     fn create_test_tablebase_files(path: &str) {
         // Create mock .rtbw and .rtbz files with minimal valid structure
         // These will be replaced with real Syzygy file format later
-        std::fs::write(
-            format!("{}/KQvK.rtbw", path),
-            generate_mock_syzygy_data("KQvK"),
-        )
-        .unwrap();
-        std::fs::write(
-            format!("{}/KRvK.rtbw", path),
-            generate_mock_syzygy_data("KRvK"),
-        )
-        .unwrap();
-        std::fs::write(
-            format!("{}/KPvK.rtbz", path),
-            generate_mock_syzygy_data("KPvK"),
-        )
-        .unwrap();
-    }
-
-    fn generate_mock_syzygy_data(material: &str) -> Vec<u8> {
-        // Generate minimal mock data that will be parsed by our implementation
-        // Real implementation will read actual Syzygy binary format
-        format!("SYZYGY_MOCK_DATA_{}", material).into_bytes()
+        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", path));
+        create_uncompressed_syzygy_file(&format!("{}/KRvK.rtbw", path));
+        create_uncompressed_syzygy_file(&format!("{}/KPvK.rtbz", path));
     }
 
     fn create_minimal_kqk_wdl_file(file_path: &str) {
         let mut data = Vec::new();
 
-        // --- Header (28 bytes total, all little-endian) ---
+        // --- Header (32 bytes total, all little-endian) ---
 
         // Magic Number (4 bytes)
         data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
@@ -317,6 +299,9 @@ mod syzygy_tests {
         // The parser will eventually need to decode this, but for the first test, it can just skip it.
         data.extend_from_slice(&0u32.to_le_bytes());
 
+        // Reserved field (4 bytes): placeholder
+        data.extend_from_slice(&0u32.to_le_bytes());
+
         // Size for side 1 (e.g., White) (8 bytes). Let's define 4 positions.
         let num_positions_white: u64 = 4;
         data.extend_from_slice(&num_positions_white.to_le_bytes());
@@ -325,7 +310,7 @@ mod syzygy_tests {
         let num_positions_black: u64 = 4;
         data.extend_from_slice(&num_positions_black.to_le_bytes());
 
-        // --- WDL Data Payload (starts at byte 28) ---
+        // --- WDL Data Payload (starts at byte 32) ---
         // Total positions = 4 (white) + 4 (black) = 8.
         // Each position is 2 bits, so we need 8 * 2 = 16 bits = 2 bytes of data.
 
@@ -338,6 +323,298 @@ mod syzygy_tests {
         // Let's make them all 'Draw' (value=1, binary=01).
         // The four results are packed: 01 01 01 01
         data.push(0b01010101); // This is 0x55
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    #[test]
+    fn test_compressed_syzygy_file_detection() {
+        // RED: Test that we can detect compressed Syzygy files (nblocks > 0)
+        let tablebase_path = "/tmp/syzygy_compressed_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create a compressed tablebase file with nblocks > 0
+        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_compressed_syzygy_file(&file_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        // Should now support compressed files instead of returning error
+        let result = syzygy.probe(&position);
+        assert!(
+            result.is_ok(),
+            "Compressed file support should work: {:?}",
+            result.err()
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_compressed_file_block_parsing() {
+        // RED: Test that we correctly parse the block structure in compressed files
+        let tablebase_path = "/tmp/syzygy_block_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_compressed_syzygy_file(&file_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        // Should parse blocks and return valid result
+        match syzygy.probe(&position).unwrap() {
+            TablebaseResult::Win(_) | TablebaseResult::Loss(_) | TablebaseResult::Draw => {
+                // Any valid result indicates successful block parsing
+            }
+        }
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_block_index_navigation() {
+        // RED: Test that we can navigate the block index table correctly
+        let tablebase_path = "/tmp/syzygy_index_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_multi_block_syzygy_file(&file_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        // Test multiple positions to ensure we navigate different blocks
+        let positions = [
+            "8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1", // First block
+            "8/8/8/8/8/1k6/1Q6/1K6 w - - 0 1", // Different block
+        ];
+
+        for fen in &positions {
+            let position = Position::from_fen(fen).unwrap();
+            let result = syzygy.probe(&position);
+            assert!(
+                result.is_ok(),
+                "Block navigation should work for position {}",
+                fen
+            );
+        }
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_decompression_algorithm() {
+        // RED: Test that we correctly implement decompression (e.g., RE-PAIR)
+        let tablebase_path = "/tmp/syzygy_decompress_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_compressed_syzygy_file_with_compression(&file_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        // Should decompress correctly and return valid result
+        let result = syzygy.probe(&position).unwrap();
+
+        // Verify we get the expected result from the decompressed data
+        match result {
+            TablebaseResult::Win(dtm) => {
+                assert!(dtm > 0, "DTM should be positive for winning position")
+            }
+            TablebaseResult::Loss(dtm) => {
+                assert!(dtm > 0, "DTM should be positive for losing position")
+            }
+            TablebaseResult::Draw => {} // Draw is valid
+        }
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_compressed_vs_uncompressed_consistency() {
+        // RED: Test that compressed and uncompressed files give same results
+        let tablebase_path = "/tmp/syzygy_consistency_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create compressed version only (the tablebase will find it by material signature)
+        let compressed_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_compressed_syzygy_file(&compressed_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        // Both should give consistent results
+        // Note: We'll need to adapt the test to handle different file names
+        // For now, just test that compressed files work
+        let result = syzygy.probe(&position);
+        assert!(
+            result.is_ok(),
+            "Compressed file should give valid result: {:?}",
+            result.err()
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_performance_with_compression() {
+        // RED: Test that compressed file performance is acceptable
+        let tablebase_path = "/tmp/syzygy_perf_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        create_compressed_syzygy_file(&file_path);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        // Time multiple lookups to ensure decompression is efficient
+        let start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = syzygy.probe(&position).unwrap();
+        }
+        let elapsed = start.elapsed();
+
+        // Should complete 100 lookups in reasonable time (< 1 second)
+        assert!(
+            elapsed.as_millis() < 1000,
+            "Compressed file lookups should be fast"
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    // Helper functions for creating test files
+
+    /// Create a minimal uncompressed Syzygy file for testing
+    fn create_uncompressed_syzygy_file(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Magic number (4 bytes, little-endian): 0x5d23e871
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+
+        // Number of blocks (4 bytes, little-endian): 0 (indicates uncompressed)
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Info field (4 bytes): placeholder
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Reserved field (4 bytes): placeholder
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Size for side 1 (8 bytes)
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // Size for side 2 (8 bytes)
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // WDL data: minimal mock data (starting at byte 32)
+        data.extend_from_slice(&[0x01, 0x02, 0x00, 0x01]); // Win, Loss, Draw, Win
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a minimal compressed Syzygy file for testing
+    fn create_compressed_syzygy_file(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Magic number (4 bytes, little-endian): 0x5d23e871
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+
+        // Number of blocks (4 bytes, little-endian): 2 (indicates compressed)
+        data.extend_from_slice(&2u32.to_le_bytes());
+
+        // Info field (4 bytes): placeholder
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Reserved field (4 bytes): placeholder
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Size for side 1 (8 bytes)
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // Size for side 2 (8 bytes)
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // Block index table (simplified)
+        // Each block entry: offset (8 bytes) + size (4 bytes)
+        // Header is 32 bytes, index table is 2 blocks * 12 bytes = 24 bytes
+        // So first block starts at 32 + 24 = 56
+        data.extend_from_slice(&56u64.to_le_bytes()); // Block 1 offset
+        data.extend_from_slice(&32u32.to_le_bytes()); // Block 1 size
+        data.extend_from_slice(&88u64.to_le_bytes()); // Block 2 offset (56 + 32)
+        data.extend_from_slice(&32u32.to_le_bytes()); // Block 2 size
+
+        // Compressed block data (simplified mock)
+        data.extend_from_slice(&vec![0xAA; 32]); // Block 1 data
+        data.extend_from_slice(&vec![0x55; 32]); // Block 2 data
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a multi-block compressed file for testing block navigation
+    fn create_multi_block_syzygy_file(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Magic number
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+
+        // Number of blocks: 4 (multiple blocks)
+        data.extend_from_slice(&4u32.to_le_bytes());
+
+        // Info and reserved fields
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+
+        // Position counts
+        data.extend_from_slice(&8u64.to_le_bytes());
+        data.extend_from_slice(&8u64.to_le_bytes());
+
+        // Block index table (4 blocks)
+        for i in 0..4 {
+            let offset = 64 + i * 32; // Start after header + index
+            data.extend_from_slice(&(offset as u64).to_le_bytes());
+            data.extend_from_slice(&32u32.to_le_bytes());
+        }
+
+        // Block data
+        for _ in 0..4 {
+            data.extend_from_slice(&vec![0xCC; 32]);
+        }
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a compressed file with actual compression markers for testing decompression
+    fn create_compressed_syzygy_file_with_compression(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Standard header (32 bytes)
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes()); // 1 block
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // Block index (1 block × 12 bytes = 12 bytes)
+        // Block data starts at: 32 (header) + 12 (index) = 44
+        data.extend_from_slice(&44u64.to_le_bytes()); // Offset after index
+        data.extend_from_slice(&16u32.to_le_bytes()); // Compressed size
+
+        // Mock compressed data (16 bytes as specified above)
+        data.extend_from_slice(&[
+            0xFF, 0x00, 0xAA, 0x55, 0x33, 0xCC, 0x0F, 0xF0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
+            0xDE, 0xF0,
+        ]);
 
         std::fs::write(file_path, data).unwrap();
     }

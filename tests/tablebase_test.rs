@@ -201,6 +201,7 @@ mod tablebase_tests {
 }
 
 /// Mock tablebase implementation for testing
+#[derive(Debug)]
 struct MockTablebase {
     // Known tablebase results for testing
 }
