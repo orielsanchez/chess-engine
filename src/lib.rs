@@ -4,6 +4,7 @@
 //! evaluation, search algorithms, and various chess-specific utilities.
 
 pub mod benchmark;
+pub mod bitboard;
 pub mod board;
 pub mod distance_to_mate;
 pub mod eval;
@@ -20,6 +21,7 @@ pub mod tui;
 pub mod types;
 pub mod uci;
 
+pub use bitboard::*;
 pub use board::*;
 pub use fen::*;
 pub use moves::*;
