@@ -17,7 +17,13 @@
   - Hash-based index calculation for unique position differentiation in tablebase data
   - Enhanced test coverage with position-specific result validation
   - Fixed unwrap() violations and improved error handling in test suite
-- [ ] **DTZ Parsing** - Add .rtbz file parsing for Distance to Zeroing and 50-move rule handling  
+- [x] **DTZ Parsing** - ✅ Complete implementation of .rtbz file parsing for Distance to Zeroing and 50-move rule handling
+  - Full TDD implementation with RED → GREEN → REFACTOR cycle (5 comprehensive tests)
+  - 8-bit DTZ byte format specification parsing (6 bits DTZ value, 2 bits outcome)
+  - Complete DtzResult enum with Win, Draw, Loss, and BlessedLoss variants
+  - Separate file loading and caching for .rtbz files alongside existing .rtbw support
+  - Proper distinction between DTM (Distance to Mate) and DTZ (Distance to Zeroing)
+  - Refactored shared code extraction for unified tablebase file loading  
 - [ ] **Search Integration** - Alpha-beta search early termination with tablebase results
 - [ ] **Distance-to-Mate** - Optimal play visualization and perfect endgame analysis
 

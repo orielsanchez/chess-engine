@@ -1,5 +1,7 @@
 use chess_engine::position::Position;
-use chess_engine::tablebase::{Tablebase, TablebaseError, TablebaseKey, TablebaseResult};
+use chess_engine::tablebase::{
+    DtzResult, Tablebase, TablebaseError, TablebaseKey, TablebaseResult,
+};
 use chess_engine::types::{Color, PieceType};
 
 /// Test suite for endgame tablebase integration
@@ -244,6 +246,11 @@ impl Tablebase for MockTablebase {
             }
             _ => Err(TablebaseError::NotFound),
         }
+    }
+
+    fn probe_dtz_specific(&self, _position: &Position) -> Result<DtzResult, TablebaseError> {
+        // Mock implementation for DTZ testing - just return a placeholder
+        Ok(DtzResult::Win { dtz: 8 })
     }
 
     fn is_available(&self, material_signature: &str) -> bool {

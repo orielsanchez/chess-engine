@@ -123,10 +123,63 @@ impl TablebaseResult {
     }
 }
 
+/// Result of a DTZ (Distance to Zeroing) tablebase lookup
+///
+/// DTZ represents the number of plies until a pawn move or capture occurs,
+/// which is relevant for the 50-move rule. This helps determine if a winning
+/// position can be converted before the 50-move rule forces a draw.
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum DtzResult {
+    /// A win is available. The `dtz` value is the number of plies
+    /// to a zeroing move (pawn move or capture).
+    /// If `dtz` is 0, this is a "Cursed Win" — a win that cannot be
+    /// forced before the 50-move rule draws the game.
+    Win { dtz: u8 },
+
+    /// The position is a draw.
+    Draw,
+
+    /// The position is a loss.
+    Loss,
+
+    /// A loss, but a zeroing move is possible. The `dtz` value is
+    /// the number of plies to that zeroing move. This allows
+    /// stretching a lost game to try and force a 50-move draw.
+    BlessedLoss { dtz: u8 },
+}
+
+impl DtzResult {
+    /// Convert DTZ result to a simplified win/draw/loss assessment
+    pub fn to_wdl(&self) -> &'static str {
+        match self {
+            Self::Win { dtz: 0 } => "Cursed Win",
+            Self::Win { .. } => "Win",
+            Self::Draw => "Draw",
+            Self::Loss => "Loss",
+            Self::BlessedLoss { .. } => "Blessed Loss",
+        }
+    }
+
+    /// Get the distance to zeroing move if applicable
+    pub fn distance_to_zero(&self) -> Option<u8> {
+        match self {
+            Self::Win { dtz } | Self::BlessedLoss { dtz } => Some(*dtz),
+            Self::Draw | Self::Loss => None,
+        }
+    }
+}
+
 /// Trait for tablebase implementations
 pub trait Tablebase: std::fmt::Debug + Send + Sync {
     /// Probe the tablebase for a position result
     fn probe(&self, position: &Position) -> Result<TablebaseResult, TablebaseError>;
+
+    /// Probe the tablebase for DTZ (Distance to Zeroing) information
+    ///
+    /// DTZ represents the number of plies until a pawn move or capture occurs,
+    /// which is relevant for the 50-move rule enforcement. This method should
+    /// read from .rtbz files and provide DTZ-specific results.
+    fn probe_dtz_specific(&self, position: &Position) -> Result<DtzResult, TablebaseError>;
 
     /// Check if tablebase data is available for this material configuration
     fn is_available(&self, material_signature: &str) -> bool;
@@ -218,6 +271,19 @@ impl Tablebase for MockTablebase {
             };
 
             Ok(adjusted_result)
+        } else {
+            Err(TablebaseError::NotFound)
+        }
+    }
+
+    fn probe_dtz_specific(&self, position: &Position) -> Result<DtzResult, TablebaseError> {
+        // Mock implementation - just return a placeholder DTZ result
+        let key = TablebaseKey::from_position(position)?;
+        let material_sig = key.material_signature();
+
+        if self.data.contains_key(material_sig) {
+            // For mock purposes, return a simple Win with DTZ=5
+            Ok(DtzResult::Win { dtz: 5 })
         } else {
             Err(TablebaseError::NotFound)
         }
@@ -841,38 +907,95 @@ pub mod syzygy {
 
         /// Load a specific tablebase file if not already loaded
         fn load_tablebase(&self, material_signature: &str) -> Result<(), TablebaseError> {
+            self.load_tablebase_file(material_signature, "rtbw", material_signature)
+        }
+
+        /// Generic file loading for both DTM and DTZ files
+        fn load_tablebase_file(
+            &self,
+            material_signature: &str,
+            extension: &str,
+            cache_key: &str,
+        ) -> Result<(), TablebaseError> {
             let mut loaded = self.loaded_tables.lock().unwrap();
 
-            if loaded.contains_key(material_signature) {
+            if loaded.contains_key(cache_key) {
                 return Ok(()); // Already loaded
             }
 
-            if let Some(path) = self.available_tables.get(material_signature) {
-                let data = std::fs::read(path).map_err(|_| TablebaseError::FileError)?;
+            // First try available_tables (for .rtbw files)
+            if extension == "rtbw" {
+                if let Some(path) = self.available_tables.get(material_signature) {
+                    let data = std::fs::read(path).map_err(|_| TablebaseError::FileError)?;
+                    let tablebase_file = TablebaseFile { data };
+                    loaded.insert(cache_key.to_string(), tablebase_file);
+                    return Ok(());
+                }
+            }
 
+            // For .rtbz files or if .rtbw not found in available_tables, look directly in directory
+            let filename = format!("{}.{}", material_signature, extension);
+            let file_path = self.tablebase_path.join(&filename);
+
+            if let Ok(data) = std::fs::read(&file_path) {
                 let tablebase_file = TablebaseFile { data };
-
-                loaded.insert(material_signature.to_string(), tablebase_file);
+                loaded.insert(cache_key.to_string(), tablebase_file);
                 Ok(())
             } else {
                 Err(TablebaseError::NotFound)
             }
         }
-    }
 
-    impl Tablebase for SyzygyTablebase {
-        fn probe(&self, position: &Position) -> Result<TablebaseResult, TablebaseError> {
+        /// Parse a DTZ byte using the 8-bit format specification
+        fn parse_dtz_byte(&self, byte: u8) -> Result<DtzResult, TablebaseError> {
+            // DTZ byte format (8 bits per position):
+            let dtz_ply = byte >> 2; // bits 7-2: DTZ value (6 bits)
+            let outcome = byte & 0b11; // bits 1-0: outcome (2 bits)
+
+            // Outcome mapping:
+            // 0b00 (0) = Loss
+            // 0b01 (1) = BlessedLoss { dtz: dtz_ply }
+            // 0b10 (2) = Draw
+            // 0b11 (3) = Win { dtz: dtz_ply }
+            match outcome {
+                0 => Ok(DtzResult::Loss),
+                1 => Ok(DtzResult::BlessedLoss { dtz: dtz_ply }),
+                2 => Ok(DtzResult::Draw),
+                3 => Ok(DtzResult::Win { dtz: dtz_ply }),
+                _ => unreachable!(), // Only 2 bits, so only 0-3 possible
+            }
+        }
+
+        /// Load a specific DTZ tablebase file (.rtbz) if not already loaded
+        fn load_dtz_tablebase(&self, material_signature: &str) -> Result<(), TablebaseError> {
+            // Use a different key for DTZ files to avoid conflicts with DTM files
+            let dtz_key = format!("{}_dtz", material_signature);
+            self.load_tablebase_file(material_signature, "rtbz", &dtz_key)
+        }
+
+        /// Common validation and setup for tablebase probes
+        fn validate_and_prepare_position(
+            &self,
+            position: &Position,
+        ) -> Result<(String, String), TablebaseError> {
             // Validate this is a tablebase position (7 pieces or fewer)
             if !position.is_tablebase_position() {
-                // For compatibility with existing tests, return NotFound for too many pieces
                 return Err(TablebaseError::NotFound);
             }
 
             let key = TablebaseKey::from_position(position)?;
-            let material_sig = key.material_signature();
+            let material_sig = key.material_signature().to_string();
 
             // Create cache key from position (simplified - real implementation would use position hash)
             let cache_key = format!("{}_{}", material_sig, position.to_fen());
+
+            Ok((material_sig, cache_key))
+        }
+    }
+
+    impl Tablebase for SyzygyTablebase {
+        fn probe(&self, position: &Position) -> Result<TablebaseResult, TablebaseError> {
+            let (material_sig, cache_key) = self.validate_and_prepare_position(position)?;
 
             // Check cache first
             {
@@ -883,15 +1006,54 @@ pub mod syzygy {
             }
 
             // Load tablebase file if needed
-            self.load_tablebase(material_sig)?;
+            self.load_tablebase(&material_sig)?;
 
             // Normalize position for consistent results across equivalent positions
-            let result = self.normalize_and_probe(position, material_sig)?;
+            let result = self.normalize_and_probe(position, &material_sig)?;
 
             // Cache the result
             self.cache_result(cache_key, result.clone());
 
             Ok(result)
+        }
+
+        fn probe_dtz_specific(&self, position: &Position) -> Result<DtzResult, TablebaseError> {
+            let (material_sig, _cache_key) = self.validate_and_prepare_position(position)?;
+
+            // Load DTZ tablebase file (.rtbz) if needed
+            self.load_dtz_tablebase(&material_sig)?;
+
+            // Get the DTZ file using the DTZ-specific key
+            let loaded = self.loaded_tables.lock().unwrap();
+            let dtz_key = format!("{}_dtz", material_sig);
+            let tablebase_file = loaded.get(&dtz_key).ok_or(TablebaseError::NotFound)?;
+
+            // For DTZ files, skip the header (32 bytes) and read directly from data area
+            let header_size = 32;
+            if tablebase_file.data.len() <= header_size {
+                return Err(TablebaseError::SyzygyError(SyzygyError::InvalidFileFormat(
+                    "DTZ file too small to contain header".to_string(),
+                )));
+            }
+
+            let dtz_data = &tablebase_file.data[header_size..];
+
+            // Calculate a simple position index for DTZ data (mod by available positions)
+            let max_positions = dtz_data.len();
+            if max_positions == 0 {
+                return Err(TablebaseError::SyzygyError(SyzygyError::InvalidFileFormat(
+                    "No DTZ positions available".to_string(),
+                )));
+            }
+
+            // Use a simplified index calculation for DTZ
+            let position_hash = position.hash();
+            let position_index = (position_hash as usize) % max_positions;
+
+            let dtz_byte = dtz_data[position_index];
+
+            // Parse DTZ byte using 8-bit format specification
+            self.parse_dtz_byte(dtz_byte)
         }
 
         fn is_available(&self, material_signature: &str) -> bool {

@@ -1,5 +1,7 @@
 use chess_engine::position::Position;
-use chess_engine::tablebase::{MockTablebase, Tablebase, TablebaseError, TablebaseResult};
+use chess_engine::tablebase::{
+    DtzResult, MockTablebase, Tablebase, TablebaseError, TablebaseKey, TablebaseResult,
+};
 
 /// Comprehensive test suite for real Syzygy tablebase support
 ///
@@ -1098,6 +1100,272 @@ mod syzygy_tests {
         data.extend_from_slice(&0x02u16.to_le_bytes()); // Win
         data.extend_from_slice(&0x01u16.to_le_bytes()); // Draw
         data.extend_from_slice(&0x00u16.to_le_bytes()); // Loss
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    // === NEW DTZ-SPECIFIC FAILING TESTS (TDD RED PHASE) ===
+
+    #[test]
+    fn test_dtz_kbn_vs_k_draws_due_to_50_move_rule() {
+        // RED: This test will FAIL because current DTZ implementation returns Win
+        // Expected: KBN vs K should be DTZ=Draw (50-move rule) but DTM=Win
+        let kbn_vs_k_position = Position::from_fen("8/4k3/8/8/8/B7/2N5/K7 w - - 0 1").unwrap();
+
+        // Check what material signature is actually generated
+        let key = TablebaseKey::from_position(&kbn_vs_k_position).unwrap();
+        let material_sig = key.material_signature();
+
+        let tablebase_path = "/tmp/syzygy_dtz_kbn_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create DTZ file with the correct material signature
+        let dtz_file = format!("{}/{}.rtbz", tablebase_path, material_sig);
+        create_dtz_file_kbn_draw(&dtz_file);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        // DTZ should return Draw (due to 50-move rule)
+        let dtz_result = syzygy.probe_dtz_specific(&kbn_vs_k_position).unwrap();
+        assert_eq!(
+            dtz_result,
+            DtzResult::Draw,
+            "KBN vs K should be DTZ Draw due to 50-move rule, got {:?}",
+            dtz_result
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_dtz_vs_dtm_different_results() {
+        // RED: This test will FAIL because current implementation doesn't distinguish DTZ from DTM
+        let position = Position::from_fen("8/4k3/8/8/8/B7/2N5/K7 w - - 0 1").unwrap();
+
+        // Get the correct material signature
+        let key = TablebaseKey::from_position(&position).unwrap();
+        let material_sig = key.material_signature();
+
+        let tablebase_path = "/tmp/syzygy_dtz_vs_dtm_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create both DTM (.rtbw) and DTZ (.rtbz) files with different results
+        create_dtm_file_all_wins(&format!("{}/{}.rtbw", tablebase_path, material_sig)); // DTM: Win
+        create_dtz_file_kbn_draw(&format!("{}/{}.rtbz", tablebase_path, material_sig)); // DTZ: Draw
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        // DTM result (whatever it is from our test file)
+        let dtm_result = syzygy.probe(&position).unwrap();
+
+        // DTZ should return Draw (different from DTM)
+        let dtz_result = syzygy.probe_dtz_specific(&position).unwrap();
+        assert_eq!(
+            dtz_result,
+            DtzResult::Draw,
+            "DTZ should return Draw due to 50-move rule, got {:?}",
+            dtz_result
+        );
+
+        // The key test: DTZ and DTM should return different results
+        // (Since our DTZ returns Draw, DTM should return either Win or Loss - not Draw)
+        let dtm_is_draw = matches!(dtm_result, TablebaseResult::Draw);
+        let dtz_is_draw = matches!(dtz_result, DtzResult::Draw);
+        assert!(
+            dtm_is_draw != dtz_is_draw,
+            "DTZ and DTM should differ: DTM={:?}, DTZ={:?}",
+            dtm_result,
+            dtz_result
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_dtz_blessed_loss_parsing() {
+        // RED: Test DTZ-specific blessed loss parsing from .rtbz file
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        let tablebase_path = "/tmp/syzygy_blessed_loss_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create DTZ file with blessed loss byte (outcome=1, dtz=5)
+        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        create_dtz_file_blessed_loss(&dtz_file);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        let dtz_result = syzygy.probe_dtz_specific(&position).unwrap();
+        assert_eq!(
+            dtz_result,
+            DtzResult::BlessedLoss { dtz: 5 },
+            "Expected BlessedLoss with DTZ=5, got {:?}",
+            dtz_result
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_dtz_cursed_win_parsing() {
+        // RED: Test DTZ-specific cursed win parsing (Win with dtz=0)
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        let tablebase_path = "/tmp/syzygy_cursed_win_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create DTZ file with cursed win byte (outcome=3, dtz=0)
+        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        create_dtz_file_cursed_win(&dtz_file);
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        let dtz_result = syzygy.probe_dtz_specific(&position).unwrap();
+        assert_eq!(
+            dtz_result,
+            DtzResult::Win { dtz: 0 },
+            "Expected Cursed Win (Win with DTZ=0), got {:?}",
+            dtz_result
+        );
+
+        // Verify it's recognized as a cursed win
+        assert_eq!(dtz_result.to_wdl(), "Cursed Win");
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    #[test]
+    fn test_dtz_byte_decoding_specification() {
+        // RED: Test the exact DTZ byte decoding specification
+        // Byte format: bits 7-2 = DTZ value, bits 1-0 = outcome
+        let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
+
+        let tablebase_path = "/tmp/syzygy_byte_decode_test";
+        std::fs::create_dir_all(tablebase_path).unwrap();
+
+        // Create DTZ file with specific byte: DTZ=12, outcome=Win (3)
+        // Byte = (12 << 2) | 3 = 48 | 3 = 51 = 0x33
+        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        create_dtz_file_specific_byte(&dtz_file, 51); // DTZ=12, Win
+
+        let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
+
+        let dtz_result = syzygy.probe_dtz_specific(&position).unwrap();
+        assert_eq!(
+            dtz_result,
+            DtzResult::Win { dtz: 12 },
+            "Expected Win with DTZ=12, got {:?}",
+            dtz_result
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(tablebase_path).ok();
+    }
+
+    // === DTZ TEST HELPER FUNCTIONS ===
+
+    /// Create a DTZ file where KBN vs K returns Draw (byte value = 2)
+    fn create_dtz_file_kbn_draw(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Standard Syzygy header (32 bytes)
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0u32.to_le_bytes()); // nblocks=0 (uncompressed)
+        data.extend_from_slice(&0u32.to_le_bytes()); // Info field
+        data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
+        data.extend_from_slice(&4u64.to_le_bytes()); // Position count side 1
+        data.extend_from_slice(&4u64.to_le_bytes()); // Position count side 2
+
+        // DTZ data: 8 bytes (8 positions, 1 byte each)
+        // All positions return Draw (byte value = 2)
+        for _ in 0..8 {
+            data.push(2); // Draw (outcome=2, dtz=0)
+        }
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    fn create_dtm_file_all_wins(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Standard Syzygy header (32 bytes)
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0u32.to_le_bytes()); // nblocks=0 (uncompressed)
+        data.extend_from_slice(&0u32.to_le_bytes()); // Info field
+        data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
+        data.extend_from_slice(&4u64.to_le_bytes()); // Position count side 1
+        data.extend_from_slice(&4u64.to_le_bytes()); // Position count side 2
+
+        // WDL data: All positions return Win (value=2, packed 2 bits per position)
+        // 4 positions per byte, all wins (2=10 binary): 10101010 = 0xAA
+        data.push(0xAA); // First 4 positions all Win
+        data.push(0xAA); // Next 4 positions all Win
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a DTZ file with blessed loss result (outcome=1, dtz=5)
+    fn create_dtz_file_blessed_loss(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Standard header
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // DTZ data: Blessed loss with DTZ=5
+        // Byte = (5 << 2) | 1 = 20 | 1 = 21
+        for _ in 0..8 {
+            data.push(21); // BlessedLoss with DTZ=5
+        }
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a DTZ file with cursed win result (outcome=3, dtz=0)
+    fn create_dtz_file_cursed_win(file_path: &str) {
+        let mut data = Vec::new();
+
+        // Standard header
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // DTZ data: Cursed win (Win with DTZ=0)
+        // Byte = (0 << 2) | 3 = 0 | 3 = 3
+        for _ in 0..8 {
+            data.push(3); // Win with DTZ=0 (Cursed Win)
+        }
+
+        std::fs::write(file_path, data).unwrap();
+    }
+
+    /// Create a DTZ file with a specific byte value for testing exact decoding
+    fn create_dtz_file_specific_byte(file_path: &str, byte_value: u8) {
+        let mut data = Vec::new();
+
+        // Standard header
+        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+        data.extend_from_slice(&4u64.to_le_bytes());
+
+        // DTZ data: All positions return the specific byte value
+        for _ in 0..8 {
+            data.push(byte_value);
+        }
 
         std::fs::write(file_path, data).unwrap();
     }
