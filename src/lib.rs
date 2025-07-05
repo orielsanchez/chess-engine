@@ -7,6 +7,7 @@ pub mod moves;
 pub mod pgn;
 pub mod position;
 pub mod search;
+pub mod tablebase;
 pub mod transposition;
 pub mod tui;
 pub mod types;

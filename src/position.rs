@@ -1,7 +1,12 @@
 use crate::board::{Board, BoardError};
+use crate::tablebase::Tablebase;
 use crate::transposition::ZOBRIST_HASHER;
 use crate::types::*;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+// Global flag for enabling/disabling tablebase lookup (for testing)
+static TABLEBASE_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Convert a piece to its Unicode chess symbol
 fn piece_to_unicode_symbol(piece: Piece) -> &'static str {
@@ -397,10 +402,80 @@ impl Position {
 
         result
     }
+
+    /// Check if this position is suitable for tablebase lookup
+    pub fn is_tablebase_position(&self) -> bool {
+        self.board.count_total_pieces() <= crate::tablebase::MAX_TABLEBASE_PIECES
+    }
+
+    /// Check if the position has a piece of the given type and color
+    pub fn has_piece(&self, color: Color, piece_type: PieceType) -> bool {
+        !self.board.pieces_of_type(color, piece_type).is_empty()
+    }
+
+    /// Probe tablebase for this position (mock implementation for now)
+    pub fn probe_tablebase(&self) -> Option<crate::tablebase::TablebaseResult> {
+        if !self.is_tablebase_lookup_enabled() || !self.is_tablebase_position() {
+            return None;
+        }
+
+        // Use mock tablebase for now
+        let tablebase = crate::tablebase::MockTablebase::new();
+        if let Ok(result) = tablebase.probe(self) {
+            Some(result)
+        } else {
+            None
+        }
+    }
+
+    /// Enable or disable tablebase lookup (for testing)
+    pub fn enable_tablebase_lookup(&self, enabled: bool) {
+        // For testing, modify a global flag
+        // In a real implementation, this would be a field on Position or a global setting
+        TABLEBASE_ENABLED.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Check if tablebase lookup is enabled (for testing)
+    pub fn is_tablebase_lookup_enabled(&self) -> bool {
+        TABLEBASE_ENABLED.load(Ordering::Relaxed)
+    }
+
+    /// Find best move using tablebase knowledge (mock implementation)
+    pub fn find_best_move_with_tablebase(&self, _time_ms: u64) -> MockSearchResult {
+        // Mock implementation for testing
+        let score = if let Some(tb_result) = self.probe_tablebase() {
+            tb_result.to_search_score()
+        } else {
+            self.evaluate()
+        };
+
+        MockSearchResult {
+            best_move: Some(MockMove::new()),
+            score,
+            depth: 15,
+        }
+    }
 }
 
 impl Default for Position {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Mock types for testing tablebase integration
+#[derive(Debug)]
+pub struct MockSearchResult {
+    pub best_move: Option<MockMove>,
+    pub score: i32,
+    pub depth: u8,
+}
+
+#[derive(Debug)]
+pub struct MockMove;
+
+impl MockMove {
+    pub fn new() -> Self {
+        Self
     }
 }

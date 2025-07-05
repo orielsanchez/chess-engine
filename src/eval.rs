@@ -100,9 +100,14 @@ impl Position {
     /// Returns a score in centipawns (100 = 1 pawn advantage)
     /// Positive scores favor the side to move
     pub fn evaluate(&self) -> i32 {
+        // First, check if we can get a tablebase result
+        if let Some(tb_result) = self.probe_tablebase() {
+            return tb_result.to_search_score();
+        }
+
         let mut score = 0;
 
-        // Material and positional evaluation
+        // Fallback to regular material and positional evaluation
         score += self.evaluate_material_and_position();
 
         // Flip score for black to move

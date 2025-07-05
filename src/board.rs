@@ -197,6 +197,22 @@ impl Board {
         }
         total
     }
+
+    pub fn pieces(&self) -> Vec<(Square, Piece)> {
+        let mut pieces = Vec::new();
+        for index in 0..64 {
+            if let Ok(square) = Square::from_index(index) {
+                if let Some(piece) = self.piece_at(square) {
+                    pieces.push((square, piece));
+                }
+            }
+        }
+        pieces
+    }
+
+    pub fn count_total_pieces(&self) -> usize {
+        self.pieces().len()
+    }
 }
 
 impl Default for Board {
