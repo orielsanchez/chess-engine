@@ -2,18 +2,18 @@
 allowed-tools: all
 description: Essential CLAUDE.md maintenance
 ---
-
 # CLAUDE.md Maintenance
-
-Essential maintenance for your instruction file.
 
 **Usage:**
 - `/claude-md backup` - Create timestamped backup before changes
 - `/claude-md update-mastery` - Update skill progression markers
 
 **Examples:**
-- `/claude-md backup` - Before major CLAUDE.md restructuring
-- `/claude-md update-mastery` - Weekly skill progression update
+- `/claude-md backup` - Create timestamped backup before changes
+- `/claude-md update-mastery` - Update skill progression markers
+
+
+Essential maintenance for your instruction file.
 
 ## Essential Functions Only
 
@@ -23,7 +23,7 @@ Essential maintenance for your instruction file.
 - Enable safe experimentation with new patterns
 
 ### **`/claude-md update-mastery`** 
-- Update the Rust Mastery Progression section
+- Update the Mastery Progression section
 - Track learning progress: novice → intermediate → advanced → expert
 - Adjust current focus areas and learning objectives
 
@@ -32,3 +32,11 @@ Essential maintenance for your instruction file.
 **Maintenance Schedule:**
 - **Backup**: Before major instruction changes
 - **Update Mastery**: Weekly progression review
+## Integration with Other Commands
+
+
+
+**TDD-First Quality Pipeline:**
+- **`/claude-md` → `/check`**: Comprehensive quality validation (tests + linting + formatting)
+- **`/claude-md` → `/debug`**: When tests fail unexpectedly, switch to systematic debugging  
+- **`/claude-md` → `/ship`**: Create final commit with proper documentation
