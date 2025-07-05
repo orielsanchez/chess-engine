@@ -1,13 +1,13 @@
 use crate::moves::Move;
 use crate::position::Position;
-use crate::types::*;
+use crate::types::{CastlingRights, Color, Piece, PieceType, Square};
 use std::fmt;
 use std::sync::LazyLock;
 
 /// Global Zobrist hasher instance for consistent hashing
 pub static ZOBRIST_HASHER: LazyLock<ZobristHasher> = LazyLock::new(ZobristHasher::new);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ZobristError {
     InvalidSquare(&'static str),
     InvalidPiece(String),
@@ -55,7 +55,7 @@ impl ZobristHasher {
 
     /// Initialize all Zobrist keys using a simple deterministic PRNG
     fn initialize_keys(&mut self) {
-        let mut rng = SimpleRng::new(0x517cc1b727220a95); // Fixed seed for deterministic keys
+        let mut rng = SimpleRng::new(0x517c_c1b7_2722_0a95); // Fixed seed for deterministic keys
 
         // Initialize piece keys
         for color in 0..2 {
@@ -135,7 +135,7 @@ impl ZobristHasher {
     }
 
     /// Get the Zobrist key for castling rights
-    pub fn hash_castling(&self, rights: &CastlingRights) -> Result<u64, ZobristError> {
+    pub const fn hash_castling(&self, rights: &CastlingRights) -> Result<u64, ZobristError> {
         let mut index = 0;
 
         if rights.white_kingside {
@@ -169,7 +169,7 @@ impl ZobristHasher {
     }
 
     /// Get the Zobrist key for side to move
-    pub fn hash_side_to_move(&self, color: Color) -> Result<u64, ZobristError> {
+    pub const fn hash_side_to_move(&self, color: Color) -> Result<u64, ZobristError> {
         match color {
             Color::White => Ok(0), // White is represented by no additional key
             Color::Black => Ok(self.side_to_move),
@@ -233,7 +233,7 @@ impl ZobristHasher {
     }
 
     /// Update hash when side to move changes
-    pub fn update_side_to_move(&self, hash: u64) -> Result<u64, ZobristError> {
+    pub const fn update_side_to_move(&self, hash: u64) -> Result<u64, ZobristError> {
         // Simply toggle the side to move key
         Ok(hash ^ self.side_to_move)
     }
@@ -349,7 +349,7 @@ impl TranspositionTable {
     }
 
     /// Get table index from hash (fast with power-of-2 size)
-    fn get_index(&self, hash: u64) -> usize {
+    const fn get_index(&self, hash: u64) -> usize {
         (hash as usize) & (self.entries.len() - 1)
     }
 
@@ -407,7 +407,7 @@ impl TranspositionTable {
     }
 
     /// Clear the table and increment generation
-    pub fn new_search(&mut self) {
+    pub const fn new_search(&mut self) {
         self.generation = self.generation.wrapping_add(1);
     }
 
@@ -424,6 +424,7 @@ impl TranspositionTable {
     }
 
     /// Get table statistics
+    #[allow(clippy::cast_precision_loss)]
     pub fn hit_rate(&self) -> f64 {
         let total = self.hits + self.misses;
         if total > 0 {
@@ -434,13 +435,15 @@ impl TranspositionTable {
     }
 
     /// Get memory usage in MB
+    #[allow(clippy::cast_precision_loss)]
     pub fn memory_usage_mb(&self) -> f64 {
         let bytes = self.entries.len() * std::mem::size_of::<TTEntry>();
         bytes as f64 / (1024.0 * 1024.0)
     }
 
     /// Get number of entries
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         self.entries.len()
     }
 }
@@ -452,13 +455,16 @@ struct SimpleRng {
 }
 
 impl SimpleRng {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self { state: seed }
     }
 
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         // Linear congruential generator constants (from Numerical Recipes)
-        self.state = self.state.wrapping_mul(1664525).wrapping_add(1013904223);
+        self.state = self
+            .state
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
         self.state
     }
 }
@@ -732,11 +738,11 @@ mod tests {
         let hash5 = hasher.hash_castling(&rights).unwrap();
 
         // All combinations should be different
-        let hashes = [hash1, hash2, hash3, hash4, hash5];
-        for i in 0..hashes.len() {
-            for j in i + 1..hashes.len() {
+        let hash_values = [hash1, hash2, hash3, hash4, hash5];
+        for i in 0..hash_values.len() {
+            for j in i + 1..hash_values.len() {
                 assert_ne!(
-                    hashes[i], hashes[j],
+                    hash_values[i], hash_values[j],
                     "Castling combinations should have unique hashes"
                 );
             }
@@ -757,7 +763,7 @@ mod tests {
     #[test]
     fn test_tt_store_and_probe_hit() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
         let score = 150;
         let depth = 5;
         let mv = Move::quiet(
@@ -786,7 +792,7 @@ mod tests {
     #[test]
     fn test_tt_probe_miss_on_empty_table() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         let entry = tt.probe(hash, 5);
         assert!(entry.is_none(), "Should miss on empty table");
@@ -796,7 +802,7 @@ mod tests {
     #[test]
     fn test_tt_probe_miss_on_insufficient_depth() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Store with depth 3
         tt.store(hash, 100, 3, None, NodeType::Exact);
@@ -810,7 +816,7 @@ mod tests {
     #[test]
     fn test_tt_replacement_strategy_deeper_replaces_shallower() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Store shallow entry
         tt.store(hash, 100, 3, None, NodeType::Exact);
@@ -828,7 +834,7 @@ mod tests {
     #[test]
     fn test_tt_replacement_strategy_same_position_deeper_replaces() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Store shallow entry
         tt.store(hash, 100, 3, None, NodeType::Exact);
@@ -848,7 +854,7 @@ mod tests {
     #[test]
     fn test_tt_clear() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Store entry
         tt.store(hash, 100, 5, None, NodeType::Exact);
@@ -870,8 +876,8 @@ mod tests {
         let mut tt = TranspositionTable::new(1);
 
         // Find two hashes that map to the same index
-        let hash1 = 0x1000000000000000;
-        let hash2 = 0x2000000000000000;
+        let hash1 = 0x1000_0000_0000_0000;
+        let hash2 = 0x2000_0000_0000_0000;
 
         // Make sure they map to the same index
         let index1 = (hash1 as usize) & (tt.size() - 1);
@@ -891,7 +897,7 @@ mod tests {
     #[test]
     fn test_tt_node_types() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Test all node types
         tt.store(hash, 100, 5, None, NodeType::Exact);
@@ -910,7 +916,7 @@ mod tests {
     #[test]
     fn test_tt_statistics() {
         let mut tt = TranspositionTable::new(1);
-        let hash = 0x123456789ABCDEF0;
+        let hash = 0x1234_5678_9ABC_DEF0;
 
         // Initial hit rate should be 0
         assert_eq!(tt.hit_rate(), 0.0);

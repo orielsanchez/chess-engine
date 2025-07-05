@@ -92,7 +92,7 @@ mod tui_enhanced_tests {
 
         // Add more than 50 commands
         for i in 0..60 {
-            history.add_command(format!("command_{}", i));
+            history.add_command(format!("command_{i}"));
         }
 
         // Should only keep last 50
@@ -175,7 +175,7 @@ mod tui_enhanced_tests {
     #[test]
     fn test_clock_widget_with_game() {
         // 5 minutes = 300,000 ms for both players
-        let clock_data = Some((300000, 300000));
+        let clock_data = Some((300_000, 300_000));
         let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 5:00 | B: 5:00");
@@ -184,7 +184,7 @@ mod tui_enhanced_tests {
     #[test]
     fn test_clock_widget_different_times() {
         // White: 4:23 = 263,000 ms, Black: 5:17 = 317,000 ms
-        let clock_data = Some((263000, 317000));
+        let clock_data = Some((263_000, 317_000));
         let widget = ClockWidget::new(clock_data, Color::White, Some(std::time::Instant::now()));
         let content = widget.content();
         assert_eq!(content, "W: 4:23 | B: 5:17");
@@ -238,8 +238,8 @@ mod tui_enhanced_tests {
         // Verify game clock is set in game state
         assert!(app.get_game_clock().is_some());
         let (white_time, black_time) = app.get_game_clock().unwrap();
-        assert_eq!(white_time, 300000); // 5 minutes in milliseconds
-        assert_eq!(black_time, 300000);
+        assert_eq!(white_time, 300_000); // 5 minutes in milliseconds
+        assert_eq!(black_time, 300_000);
     }
 
     #[test]

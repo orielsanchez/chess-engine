@@ -15,6 +15,10 @@ pub struct TablebaseKey {
 
 impl TablebaseKey {
     /// Create a tablebase key from a chess position
+    ///
+    /// # Errors
+    ///
+    /// Returns `TablebaseError` if the position cannot be processed
     pub fn from_position(position: &Position) -> Result<Self, TablebaseError> {
         let material_sig = Self::generate_material_signature(position);
         let position_hash = Self::generate_position_hash(position);
@@ -26,13 +30,14 @@ impl TablebaseKey {
         })
     }
 
-    /// Get the material signature (e.g. "KQvK")
+    /// Get the material signature (e.g. `KQvK`)
     pub fn material_signature(&self) -> &str {
         &self.material_sig
     }
 
     /// Get the side to move
-    pub fn side_to_move(&self) -> Color {
+    #[must_use]
+    pub const fn side_to_move(&self) -> Color {
         self.side_to_move
     }
 
@@ -107,7 +112,8 @@ pub enum TablebaseResult {
 
 impl TablebaseResult {
     /// Convert tablebase result to search score (centipawns)
-    pub fn to_search_score(&self) -> i32 {
+    #[must_use]
+    pub const fn to_search_score(&self) -> i32 {
         match self {
             Self::Win(dtm) => {
                 // Winning score, adjusted for distance to mate
@@ -150,7 +156,8 @@ pub enum DtzResult {
 
 impl DtzResult {
     /// Convert DTZ result to a simplified win/draw/loss assessment
-    pub fn to_wdl(&self) -> &'static str {
+    #[must_use]
+    pub const fn to_wdl(&self) -> &'static str {
         match self {
             Self::Win { dtz: 0 } => "Cursed Win",
             Self::Win { .. } => "Win",
@@ -161,7 +168,8 @@ impl DtzResult {
     }
 
     /// Get the distance to zeroing move if applicable
-    pub fn distance_to_zero(&self) -> Option<u8> {
+    #[must_use]
+    pub const fn distance_to_zero(&self) -> Option<u8> {
         match self {
             Self::Win { dtz } | Self::BlessedLoss { dtz } => Some(*dtz),
             Self::Draw | Self::Loss => None,
@@ -644,7 +652,7 @@ pub mod syzygy {
             ]);
 
             // Verify magic number for WDL file
-            if magic != 0x5d23e871 {
+            if magic != 0x5d23_e871 {
                 return Err(TablebaseError::SyzygyError(SyzygyError::InvalidFileFormat(
                     format!("Invalid magic number: 0x{:08x}", magic),
                 )));

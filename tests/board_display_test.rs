@@ -67,9 +67,7 @@ fn test_ascii_board_piece_symbols() {
         let display = position.to_ascii_board();
         assert!(
             display.contains(expected_symbol),
-            "FEN {} should contain symbol {}",
-            fen,
-            expected_symbol
+            "FEN {fen} should contain symbol {expected_symbol}"
         );
     }
 }
@@ -86,8 +84,8 @@ fn test_ascii_board_coordinates() {
     // Should have rank numbers on both sides
     for rank in 1..=8 {
         let rank_str = rank.to_string();
-        assert!(display.contains(&format!("{} ", rank_str)));
-        assert!(display.contains(&format!(" {}", rank_str)));
+        assert!(display.contains(&format!("{rank_str} ")));
+        assert!(display.contains(&format!(" {rank_str}")));
     }
 }
 
@@ -107,8 +105,8 @@ fn test_ascii_board_layout_structure() {
     // Ranks 8-1 (lines 1-8)
     for (i, line) in lines.iter().enumerate().take(9).skip(1) {
         let expected_rank = 9 - i; // Line 1 = rank 8, line 8 = rank 1
-        assert!(line.starts_with(&format!("{} ", expected_rank)));
-        assert!(line.ends_with(&format!(" {}", expected_rank)));
+        assert!(line.starts_with(&format!("{expected_rank} ")));
+        assert!(line.ends_with(&format!(" {expected_rank}")));
     }
 
     // Last line should be file coordinates again

@@ -20,12 +20,15 @@ pub struct Score {
 }
 
 impl Score {
-    pub fn new(mg: i32, eg: i32) -> Self {
+    #[must_use]
+    pub const fn new(mg: i32, eg: i32) -> Self {
         Self { mg, eg }
     }
 
+    #[must_use]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     pub fn interpolate(&self, phase_factor: f32) -> i32 {
-        (self.mg as f32 * phase_factor + self.eg as f32 * (1.0 - phase_factor)) as i32
+        (self.mg as f32).mul_add(phase_factor, self.eg as f32 * (1.0 - phase_factor)) as i32
     }
 }
 
@@ -43,7 +46,7 @@ impl SubAssign for Score {
     }
 }
 
-// Piece mobility weights (mg, eg values in centipawns per move)
+/// Piece mobility weights (middlegame, endgame values in centipawns per move)
 const MOBILITY_WEIGHTS: [(i32, i32); 6] = [
     (5, 3), // Pawn
     (4, 2), // Knight
@@ -55,39 +58,44 @@ const MOBILITY_WEIGHTS: [(i32, i32); 6] = [
 
 // Game phase detection constants (in get_game_phase method)
 
-// Piece-square tables (from white's perspective)
-// Values in centipawns (100 = 1 pawn)
-
+/// Piece-square tables (from white's perspective)
+/// Values in centipawns (100 = 1 pawn)
+/// Pawn piece-square table with positional values for each square
 const PAWN_TABLE: [i32; 64] = [
     0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5, 5,
     10, 25, 25, 10, 5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, -5, -10, 0, 0, -10, -5, 5, 5, 10, 10, -20,
     -20, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+/// Knight piece-square table with positional values for each square
 const KNIGHT_TABLE: [i32; 64] = [
     -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 0, 0, -20, -40, -30, 0, 10, 15, 15, 10,
     0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10,
     5, -30, -40, -20, 0, 5, 5, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
 ];
 
+/// Bishop piece-square table with positional values for each square
 const BISHOP_TABLE: [i32; 64] = [
     -20, -10, -10, -10, -10, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 10, 10, 5, 0,
     -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 10, 10, 10, 10, 10, 10,
     -10, -10, 5, 0, 0, 0, 0, 5, -10, -20, -10, -10, -10, -10, -10, -10, -20,
 ];
 
+/// Rook piece-square table with positional values for each square
 const ROOK_TABLE: [i32; 64] = [
     0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, 10, 10, 10, 10, 5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0,
     0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 0, 0,
     0, 5, 5, 0, 0, 0,
 ];
 
+/// Queen piece-square table with positional values for each square
 const QUEEN_TABLE: [i32; 64] = [
     -20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10,
     -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0,
     0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20,
 ];
 
+/// King piece-square table for middlegame with positional values for each square
 const KING_MIDDLE_GAME_TABLE: [i32; 64] = [
     -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40,
     -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30,
@@ -99,6 +107,7 @@ impl Position {
     /// Evaluate the position from the perspective of the side to move
     /// Returns a score in centipawns (100 = 1 pawn advantage)
     /// Positive scores favor the side to move
+    #[must_use]
     pub fn evaluate(&self) -> i32 {
         // First, check if we can get a tablebase result
         if let Some(tb_result) = self.probe_tablebase() {
@@ -130,6 +139,7 @@ impl Position {
     /// - Kings: Not evaluated for mobility
     ///
     /// Mobility is more important in the middlegame than the endgame.
+    #[must_use]
     pub fn evaluate_piece_mobility(&self) -> Score {
         let mut score = Score::default();
 
@@ -174,7 +184,9 @@ impl Position {
 
     /// Count knight moves from a square
     fn count_knight_moves(&self, from: Square) -> i32 {
+        #[allow(clippy::cast_possible_wrap)]
         let from_rank = from.rank() as i8;
+        #[allow(clippy::cast_possible_wrap)]
         let from_file = from.file() as i8;
         let knight_offsets = [
             (-2, -1),
@@ -188,11 +200,12 @@ impl Position {
         ];
 
         let mut count = 0;
-        for (rank_offset, file_offset) in knight_offsets.iter() {
+        for (rank_offset, file_offset) in &knight_offsets {
             let to_rank = from_rank + rank_offset;
             let to_file = from_file + file_offset;
 
             if (0..8).contains(&to_rank) && (0..8).contains(&to_file) {
+                #[allow(clippy::cast_sign_loss)]
                 if let Ok(to_square) = Square::new(to_rank as u8, to_file as u8) {
                     if let Some(piece_at_square) = self.piece_at(from) {
                         let piece_color = piece_at_square.color;
@@ -209,6 +222,7 @@ impl Position {
     }
 
     /// Count bishop moves from a square  
+    #[must_use]
     pub fn count_bishop_moves(&self, from: Square) -> i32 {
         let directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
         self.count_sliding_moves(from, &directions)
@@ -343,6 +357,7 @@ impl Position {
         count
     }
 
+    /// Evaluate material balance and piece-square table values for the position
     fn evaluate_material_and_position(&self) -> i32 {
         let mut score = 0;
 
@@ -621,6 +636,8 @@ impl Position {
     }
 
     /// Calculate game phase factor (1.0 = opening, 0.0 = endgame)
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn get_game_phase_factor(&self) -> f32 {
         const MAX_PHASE_MATERIAL: i32 = 2 * (2 * 320 + 2 * 330 + 2 * 500 + 900); // 2 Knights, 2 Bishops, 2 Rooks, 1 Queen per side
         let current_material = self.get_non_pawn_material();
@@ -637,6 +654,7 @@ impl Position {
     }
 
     /// Determine current game phase based on material and position characteristics
+    #[must_use]
     pub fn get_game_phase(&self) -> GamePhase {
         let material_factor = self.get_game_phase_factor();
 
@@ -663,7 +681,7 @@ impl Position {
             if let Ok(square_obj) = Square::from_index(square as u8) {
                 if let Some(piece) = self.board.piece_at(square_obj) {
                     match piece.piece_type {
-                        PieceType::Pawn | PieceType::King => continue,
+                        PieceType::Pawn | PieceType::King => {}
                         _ => return false, // Found a piece that's not a pawn or king
                     }
                 }
@@ -689,6 +707,7 @@ impl Position {
         material
     }
 
+    /// Get the base material value for a piece type in centipawns
     fn get_piece_value(&self, piece_type: PieceType) -> i32 {
         match piece_type {
             PieceType::Pawn => 100,
@@ -700,6 +719,7 @@ impl Position {
         }
     }
 
+    /// Get the positional value for a piece type on a specific square
     fn get_positional_value(&self, piece_type: PieceType, color: Color, square: usize) -> i32 {
         let table = match piece_type {
             PieceType::Pawn => &PAWN_TABLE,
@@ -719,6 +739,7 @@ impl Position {
     }
 
     /// Evaluate opening-specific factors like development and center control
+    #[must_use]
     pub fn evaluate_opening_phase(&self) -> Score {
         let mut score = Score::default();
 
@@ -735,6 +756,7 @@ impl Position {
     }
 
     /// Evaluate middlegame-specific factors like piece coordination and tactics
+    #[must_use]
     pub fn evaluate_middlegame_phase(&self) -> Score {
         let mut score = Score::default();
 
@@ -748,6 +770,7 @@ impl Position {
     }
 
     /// Evaluate endgame-specific factors like king activity and pawn promotion
+    #[must_use]
     pub fn evaluate_endgame_phase(&self) -> Score {
         let mut score = Score::default();
 

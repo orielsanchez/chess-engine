@@ -193,6 +193,10 @@ fn create_mock_search_result_with_pv(move_notations: Vec<&str>, depth: u8) -> Se
         aspiration_researches: 0,
         aspiration_window_size: 50,
         principal_variation,
+        dtm_result: None,
+        mate_sequence: None,
+        used_dtm_ordering: false,
+        dtm_analysis_status: "not_attempted".to_string(),
     }
 }
 

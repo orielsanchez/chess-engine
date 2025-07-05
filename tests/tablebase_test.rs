@@ -11,7 +11,6 @@ use chess_engine::types::{Color, PieceType};
 /// 2. Tablebase lookup with known results  
 /// 3. Integration with evaluation system
 /// 4. Search optimization with tablebase knowledge
-
 #[cfg(test)]
 mod tablebase_tests {
     use super::*;

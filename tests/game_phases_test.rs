@@ -284,9 +284,7 @@ mod tests {
             // Game phase factor should decrease monotonically as material decreases
             assert!(
                 factor < prev_factor,
-                "Game phase factor should decrease as material decreases, got {} after {}",
-                factor,
-                prev_factor
+                "Game phase factor should decrease as material decreases, got {factor} after {prev_factor}"
             );
             prev_factor = factor;
         }

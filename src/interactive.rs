@@ -81,6 +81,11 @@ pub struct InteractiveEngine {
 }
 
 impl InteractiveEngine {
+    /// Create a new interactive engine
+    ///
+    /// # Errors
+    ///
+    /// Returns `PositionError` if the starting position cannot be created
     pub fn new() -> Result<Self, PositionError> {
         Ok(Self {
             position: Position::starting_position()?,
@@ -88,7 +93,8 @@ impl InteractiveEngine {
         })
     }
 
-    pub fn current_position(&self) -> &Position {
+    #[must_use]
+    pub const fn current_position(&self) -> &Position {
         &self.position
     }
 
@@ -332,14 +338,15 @@ impl InteractiveEngine {
         })
     }
 
-    fn handle_clock(&self) -> Result<InteractiveResponse, String> {
+    const fn handle_clock(&self) -> Result<InteractiveResponse, String> {
         // Note: This will be bridged to TuiApp later
         Ok(InteractiveResponse::GameClock {
-            white_time_ms: 300000, // 5 minutes
-            black_time_ms: 300000, // 5 minutes
+            white_time_ms: 300_000, // 5 minutes
+            black_time_ms: 300_000, // 5 minutes
         })
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub fn format_response(response: &InteractiveResponse) -> String {
         match response {
             InteractiveResponse::Analysis {

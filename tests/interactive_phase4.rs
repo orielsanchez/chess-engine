@@ -148,8 +148,8 @@ fn test_phase4_command_execution() -> Result<(), Box<dyn std::error::Error>> {
         black_time_ms,
     } = response
     {
-        assert_eq!(white_time_ms, 300000);
-        assert_eq!(black_time_ms, 300000);
+        assert_eq!(white_time_ms, 300_000);
+        assert_eq!(black_time_ms, 300_000);
     } else {
         panic!("Expected GameClock response");
     }
@@ -187,8 +187,8 @@ fn test_response_formatting() {
 
     // Test GameClock formatting
     let response = InteractiveResponse::GameClock {
-        white_time_ms: 300000, // 5:00
-        black_time_ms: 180000, // 3:00
+        white_time_ms: 300_000, // 5:00
+        black_time_ms: 180_000, // 3:00
     };
     let formatted = chess_engine::interactive::InteractiveEngine::format_response(&response);
     assert!(formatted.contains("White: 5:00"));

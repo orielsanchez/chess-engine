@@ -63,7 +63,7 @@ fn test_generate_optimal_mate_sequence() {
     let mate_seq = sequence.unwrap();
 
     assert_eq!(mate_seq.length(), 10, "Should show 10-move mate sequence");
-    assert!(mate_seq.moves().len() > 0, "Should contain actual moves");
+    assert!(!mate_seq.moves().is_empty(), "Should contain actual moves");
     assert!(mate_seq.is_forced_mate(), "Should indicate forced mate");
 
     // First move should be the best tablebase move

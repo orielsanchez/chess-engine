@@ -123,10 +123,10 @@ fn test_phase3_advantage_indicator_accuracy() {
 #[test]
 fn test_phase3_nodes_per_second_calculation_accuracy() {
     let test_cases = vec![
-        (10000, 1000, 10000),  // 10k nodes / 1s = 10k nps
-        (50000, 500, 100000),  // 50k nodes / 0.5s = 100k nps
-        (100000, 2000, 50000), // 100k nodes / 2s = 50k nps
-        (1000, 100, 10000),    // 1k nodes / 0.1s = 10k nps
+        (10000, 1000, 10000),   // 10k nodes / 1s = 10k nps
+        (50000, 500, 100_000),  // 50k nodes / 0.5s = 100k nps
+        (100_000, 2000, 50000), // 100k nodes / 2s = 50k nps
+        (1000, 100, 10000),     // 1k nodes / 0.1s = 10k nps
     ];
 
     for (nodes, time_ms, expected_nps) in test_cases {
@@ -138,12 +138,8 @@ fn test_phase3_nodes_per_second_calculation_accuracy() {
         let content = widget.content();
 
         assert!(
-            content.contains(&format!("NPS: {}", expected_nps)),
-            "Expected NPS {} for {} nodes in {}ms, but content was: {}",
-            expected_nps,
-            nodes,
-            time_ms,
-            content
+            content.contains(&format!("NPS: {expected_nps}")),
+            "Expected NPS {expected_nps} for {nodes} nodes in {time_ms}ms, but content was: {content}"
         );
     }
 }
@@ -170,5 +166,9 @@ fn create_comprehensive_search_result() -> SearchResult {
         aspiration_researches: 2,
         aspiration_window_size: 75,
         principal_variation: vec![best_move],
+        dtm_result: None,
+        mate_sequence: None,
+        used_dtm_ordering: false,
+        dtm_analysis_status: "not_attempted".to_string(),
     }
 }

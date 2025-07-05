@@ -1,4 +1,4 @@
-use crate::types::*;
+use crate::types::{PieceType, Square};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,42 +19,46 @@ pub enum MoveType {
 }
 
 impl MoveType {
-    pub fn is_promotion(self) -> bool {
+    #[must_use]
+    pub const fn is_promotion(self) -> bool {
         matches!(
             self,
-            MoveType::PromotionQueen
-                | MoveType::PromotionRook
-                | MoveType::PromotionBishop
-                | MoveType::PromotionKnight
-                | MoveType::PromotionCaptureQueen
-                | MoveType::PromotionCaptureRook
-                | MoveType::PromotionCaptureBishop
-                | MoveType::PromotionCaptureKnight
+            Self::PromotionQueen
+                | Self::PromotionRook
+                | Self::PromotionBishop
+                | Self::PromotionKnight
+                | Self::PromotionCaptureQueen
+                | Self::PromotionCaptureRook
+                | Self::PromotionCaptureBishop
+                | Self::PromotionCaptureKnight
         )
     }
 
-    pub fn is_capture(self) -> bool {
+    #[must_use]
+    pub const fn is_capture(self) -> bool {
         matches!(
             self,
-            MoveType::Capture
-                | MoveType::EnPassant
-                | MoveType::PromotionCaptureQueen
-                | MoveType::PromotionCaptureRook
-                | MoveType::PromotionCaptureBishop
-                | MoveType::PromotionCaptureKnight
+            Self::Capture
+                | Self::EnPassant
+                | Self::PromotionCaptureQueen
+                | Self::PromotionCaptureRook
+                | Self::PromotionCaptureBishop
+                | Self::PromotionCaptureKnight
         )
     }
 
-    pub fn is_castle(self) -> bool {
-        matches!(self, MoveType::CastleKingside | MoveType::CastleQueenside)
+    #[must_use]
+    pub const fn is_castle(self) -> bool {
+        matches!(self, Self::CastleKingside | Self::CastleQueenside)
     }
 
-    pub fn promotion_piece(self) -> Option<PieceType> {
+    #[must_use]
+    pub const fn promotion_piece(self) -> Option<PieceType> {
         match self {
-            MoveType::PromotionQueen | MoveType::PromotionCaptureQueen => Some(PieceType::Queen),
-            MoveType::PromotionRook | MoveType::PromotionCaptureRook => Some(PieceType::Rook),
-            MoveType::PromotionBishop | MoveType::PromotionCaptureBishop => Some(PieceType::Bishop),
-            MoveType::PromotionKnight | MoveType::PromotionCaptureKnight => Some(PieceType::Knight),
+            Self::PromotionQueen | Self::PromotionCaptureQueen => Some(PieceType::Queen),
+            Self::PromotionRook | Self::PromotionCaptureRook => Some(PieceType::Rook),
+            Self::PromotionBishop | Self::PromotionCaptureBishop => Some(PieceType::Bishop),
+            Self::PromotionKnight | Self::PromotionCaptureKnight => Some(PieceType::Knight),
             _ => None,
         }
     }
@@ -68,7 +72,8 @@ pub struct Move {
 }
 
 impl Move {
-    pub fn new(from: Square, to: Square, move_type: MoveType) -> Self {
+    #[must_use]
+    pub const fn new(from: Square, to: Square, move_type: MoveType) -> Self {
         Self {
             from,
             to,
@@ -76,26 +81,32 @@ impl Move {
         }
     }
 
+    #[must_use]
     pub fn quiet(from: Square, to: Square) -> Self {
         Self::new(from, to, MoveType::Quiet)
     }
 
+    #[must_use]
     pub fn capture(from: Square, to: Square) -> Self {
         Self::new(from, to, MoveType::Capture)
     }
 
+    #[must_use]
     pub fn en_passant(from: Square, to: Square) -> Self {
         Self::new(from, to, MoveType::EnPassant)
     }
 
+    #[must_use]
     pub fn castle_kingside(from: Square, to: Square) -> Self {
         Self::new(from, to, MoveType::CastleKingside)
     }
 
+    #[must_use]
     pub fn castle_queenside(from: Square, to: Square) -> Self {
         Self::new(from, to, MoveType::CastleQueenside)
     }
 
+    #[must_use]
     pub fn promotion(from: Square, to: Square, piece_type: PieceType, is_capture: bool) -> Self {
         let move_type = match (piece_type, is_capture) {
             (PieceType::Queen, false) => MoveType::PromotionQueen,
@@ -111,11 +122,12 @@ impl Move {
         Self::new(from, to, move_type)
     }
 
+    #[must_use]
     pub fn to_algebraic(&self) -> String {
         let from_str = self.from.to_algebraic();
         let to_str = self.to.to_algebraic();
 
-        let mut result = format!("{}{}", from_str, to_str);
+        let mut result = format!("{from_str}{to_str}");
 
         if let Some(piece) = self.move_type.promotion_piece() {
             let piece_char = match piece {
@@ -169,6 +181,13 @@ impl Move {
         };
 
         Ok(Self::new(from, to, move_type))
+    }
+
+    /// Check if move has valid squares (minimal implementation)
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        // Basic validation: squares should be different and valid
+        self.from != self.to && self.from.index() < 64 && self.to.index() < 64
     }
 }
 

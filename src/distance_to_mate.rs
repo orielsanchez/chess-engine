@@ -17,16 +17,22 @@ pub struct DistanceToMateAnalyzer {
 
 impl DistanceToMateAnalyzer {
     /// Create a new distance-to-mate analyzer
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { ready: true }
     }
 
     /// Check if analyzer is ready for analysis
-    pub fn is_ready(&self) -> bool {
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
         self.ready
     }
 
     /// Calculate distance to mate for a given position
+    ///
+    /// # Errors
+    ///
+    /// Returns `DistanceToMateError::NotInTablebase` if position is not in tablebase
     pub fn calculate_distance_to_mate(
         &self,
         position: &Position,
@@ -47,6 +53,11 @@ impl DistanceToMateAnalyzer {
     }
 
     /// Generate complete mate sequence from current position
+    ///
+    /// # Errors
+    ///
+    /// Returns `DistanceToMateError::NotInTablebase` if position is not in tablebase
+    /// Returns `DistanceToMateError::NotWinning` if position is not winning
     pub fn generate_mate_sequence(
         &self,
         position: &Position,
@@ -58,36 +69,51 @@ impl DistanceToMateAnalyzer {
         }
 
         // Generate minimal mate sequence
-        let moves = self.generate_optimal_moves(position, dtm_result.distance())?;
+        let moves = Self::generate_optimal_moves(position, dtm_result.distance())?;
 
         Ok(MateSequence::new(moves, dtm_result.distance()))
     }
 
     /// Generate visual representation of mate path
+    ///
+    /// # Errors
+    ///
+    /// Returns `DistanceToMateError::NotInTablebase` if position is not in tablebase
+    /// Returns `DistanceToMateError::NotWinning` if position is not winning
     pub fn visualize_mate_path(&self, position: &Position) -> Result<String, DistanceToMateError> {
+        use std::fmt::Write;
+
         let sequence = self.generate_mate_sequence(position)?;
 
         let mut visualization = String::new();
-        visualization.push_str(&format!("Mate in {} moves:\n\n", sequence.length()));
+        write!(visualization, "Mate in {} moves:\n\n", sequence.length()).unwrap();
 
         for (i, mate_move) in sequence.moves().iter().enumerate() {
-            visualization.push_str(&format!(
-                "Move {}: {} (DTM: {}) - {} to move\n",
+            let side_str = if mate_move.side_to_move() == Color::White {
+                "White"
+            } else {
+                "Black"
+            };
+            writeln!(
+                visualization,
+                "Move {}: {} (DTM: {}) - {} to move",
                 i + 1,
                 mate_move.move_notation(),
                 mate_move.distance_to_mate(),
-                if mate_move.side_to_move() == Color::White {
-                    "White"
-                } else {
-                    "Black"
-                }
-            ));
+                side_str
+            )
+            .unwrap();
         }
 
         Ok(visualization)
     }
 
     /// Create interactive study session
+    ///
+    /// # Errors
+    ///
+    /// Returns `DistanceToMateError::NotInTablebase` if position is not in tablebase
+    /// Returns `DistanceToMateError::NotWinning` if position is not winning
     pub fn create_study_session(
         &self,
         position: &Position,
@@ -98,7 +124,6 @@ impl DistanceToMateAnalyzer {
 
     /// Generate optimal moves for mate sequence (minimal implementation)
     fn generate_optimal_moves(
-        &self,
         position: &Position,
         distance: usize,
     ) -> Result<Vec<MateMove>, DistanceToMateError> {
@@ -113,13 +138,13 @@ impl DistanceToMateAnalyzer {
         // Generate minimal sequence of moves
         let mut moves = Vec::new();
         let mut current_side = position.side_to_move;
-        let _starting_side = position.side_to_move;
 
         for i in 0..distance {
             let remaining_dtm = distance - i;
 
             // For mate sequences, the evaluation should always be positive for the winning side
             // and decrease as we get closer to mate
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             let evaluation = 20000 - (remaining_dtm as i32 * 10);
 
             let mate_move = MateMove::new(
@@ -151,7 +176,7 @@ impl Default for DistanceToMateAnalyzer {
 }
 
 /// Result of distance-to-mate calculation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DistanceToMateResult {
     result: TablebaseResult,
     distance: usize,
@@ -160,11 +185,14 @@ pub struct DistanceToMateResult {
 
 impl DistanceToMateResult {
     /// Create from tablebase result
+    #[must_use]
     pub fn from_tablebase(result: TablebaseResult) -> Self {
         Self::from_tablebase_with_fifty_move(result, false)
     }
 
     /// Create from tablebase result with 50-move rule consideration
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn from_tablebase_with_fifty_move(
         result: TablebaseResult,
         considers_fifty_move: bool,
@@ -188,38 +216,44 @@ impl DistanceToMateResult {
     }
 
     /// Get distance to mate
-    pub fn distance(&self) -> usize {
+    #[must_use]
+    pub const fn distance(&self) -> usize {
         self.distance
     }
 
     /// Get tablebase result
+    #[must_use]
     pub fn result(&self) -> TablebaseResult {
         self.result.clone()
     }
 
     /// Check if position is winning
-    pub fn is_winning(&self) -> bool {
+    #[must_use]
+    pub const fn is_winning(&self) -> bool {
         matches!(self.result, TablebaseResult::Win(_))
     }
 
     /// Check if position is losing
-    pub fn is_losing(&self) -> bool {
+    #[must_use]
+    pub const fn is_losing(&self) -> bool {
         matches!(self.result, TablebaseResult::Loss(_))
     }
 
     /// Check if position is drawn
-    pub fn is_draw(&self) -> bool {
+    #[must_use]
+    pub const fn is_draw(&self) -> bool {
         matches!(self.result, TablebaseResult::Draw)
     }
 
     /// Check if 50-move rule is considered
-    pub fn considers_fifty_move_rule(&self) -> bool {
+    #[must_use]
+    pub const fn considers_fifty_move_rule(&self) -> bool {
         self.considers_fifty_move
     }
 }
 
 /// Complete sequence of moves leading to mate
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MateSequence {
     moves: Vec<MateMove>,
     total_distance: usize,
@@ -227,7 +261,8 @@ pub struct MateSequence {
 
 impl MateSequence {
     /// Create new mate sequence
-    pub fn new(moves: Vec<MateMove>, total_distance: usize) -> Self {
+    #[must_use]
+    pub const fn new(moves: Vec<MateMove>, total_distance: usize) -> Self {
         Self {
             moves,
             total_distance,
@@ -235,23 +270,26 @@ impl MateSequence {
     }
 
     /// Get sequence length
-    pub fn length(&self) -> usize {
+    #[must_use]
+    pub const fn length(&self) -> usize {
         self.total_distance
     }
 
     /// Get all moves in sequence
+    #[must_use]
     pub fn moves(&self) -> &[MateMove] {
         &self.moves
     }
 
     /// Check if this is a forced mate
-    pub fn is_forced_mate(&self) -> bool {
+    #[must_use]
+    pub const fn is_forced_mate(&self) -> bool {
         !self.moves.is_empty()
     }
 }
 
 /// Individual move in mate sequence with analysis data
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MateMove {
     chess_move: Move,
     evaluation: i32,
@@ -263,7 +301,8 @@ pub struct MateMove {
 
 impl MateMove {
     /// Create new mate move
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         chess_move: Move,
         evaluation: i32,
         distance_to_mate: usize,
@@ -282,37 +321,44 @@ impl MateMove {
     }
 
     /// Get evaluation score
-    pub fn evaluation(&self) -> i32 {
+    #[must_use]
+    pub const fn evaluation(&self) -> i32 {
         self.evaluation
     }
 
     /// Get distance to mate from this position
-    pub fn distance_to_mate(&self) -> usize {
+    #[must_use]
+    pub const fn distance_to_mate(&self) -> usize {
         self.distance_to_mate
     }
 
     /// Get side to move
-    pub fn side_to_move(&self) -> Color {
+    #[must_use]
+    pub const fn side_to_move(&self) -> Color {
         self.side_to_move
     }
 
     /// Check if this is the best move
-    pub fn is_best_move(&self) -> bool {
+    #[must_use]
+    pub const fn is_best_move(&self) -> bool {
         self.is_best
     }
 
     /// Check if this is optimal play
-    pub fn is_optimal(&self) -> bool {
+    #[must_use]
+    pub const fn is_optimal(&self) -> bool {
         self.is_optimal
     }
 
     /// Get move notation (simplified)
+    #[must_use]
     pub fn move_notation(&self) -> String {
         format!("{}{}", self.chess_move.from, self.chess_move.to)
     }
 
     /// Check if move has explanation
-    pub fn has_explanation(&self) -> bool {
+    #[must_use]
+    pub const fn has_explanation(&self) -> bool {
         true // Minimal implementation
     }
 }
@@ -326,7 +372,8 @@ pub struct StudySession {
 
 impl StudySession {
     /// Create new study session
-    pub fn new(sequence: MateSequence) -> Self {
+    #[must_use]
+    pub const fn new(sequence: MateSequence) -> Self {
         Self {
             sequence,
             current_move: 0,
@@ -334,6 +381,7 @@ impl StudySession {
     }
 
     /// Check if there are more moves to study
+    #[must_use]
     pub fn has_next_move(&self) -> bool {
         self.current_move < self.sequence.moves().len()
     }
@@ -350,13 +398,14 @@ impl StudySession {
     }
 
     /// Check if mate has been reached
+    #[must_use]
     pub fn is_mate_reached(&self) -> bool {
         self.current_move >= self.sequence.moves().len()
     }
 }
 
 /// Errors that can occur during distance-to-mate analysis
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DistanceToMateError {
     /// Position is not in tablebase
     NotInTablebase,

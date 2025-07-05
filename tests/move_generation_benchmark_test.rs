@@ -98,8 +98,7 @@ mod tests {
         let efficiency = result.efficiency_ratio();
         assert!(
             efficiency > 0.1 && efficiency <= 1.0,
-            "Efficiency ratio should be between 0.1 and 1.0, got: {}",
-            efficiency
+            "Efficiency ratio should be between 0.1 and 1.0, got: {efficiency}"
         );
     }
 

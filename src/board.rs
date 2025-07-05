@@ -1,7 +1,7 @@
-use crate::types::*;
+use crate::types::{Color, Piece, PieceType, Square};
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BoardError {
     InvalidSquare(&'static str),
     SetupError(String),
@@ -10,8 +10,8 @@ pub enum BoardError {
 impl fmt::Display for BoardError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BoardError::InvalidSquare(msg) => write!(f, "Invalid square: {}", msg),
-            BoardError::SetupError(msg) => write!(f, "Board setup error: {}", msg),
+            Self::InvalidSquare(msg) => write!(f, "Invalid square: {msg}"),
+            Self::SetupError(msg) => write!(f, "Board setup error: {msg}"),
         }
     }
 }
@@ -20,22 +20,29 @@ impl std::error::Error for BoardError {}
 
 impl From<&'static str> for BoardError {
     fn from(msg: &'static str) -> Self {
-        BoardError::InvalidSquare(msg)
+        Self::InvalidSquare(msg)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
+    /// Array representing the 64 squares of the chessboard, indexed 0-63
     squares: [Option<Piece>; 64],
 }
 
 impl Board {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             squares: [None; 64],
         }
     }
 
+    /// Creates a board with the standard chess starting position.
+    ///
+    /// # Errors
+    ///
+    /// Returns `BoardError::InvalidSquare` if there's an issue setting up the pieces.
     pub fn starting_position() -> Result<Self, BoardError> {
         let mut board = Self::new();
 
@@ -120,6 +127,7 @@ impl Board {
         Ok(board)
     }
 
+    #[must_use]
     pub fn piece_at(&self, square: Square) -> Option<Piece> {
         self.squares[square.index() as usize]
     }
@@ -128,21 +136,23 @@ impl Board {
         self.squares[square.index() as usize] = piece;
     }
 
+    #[must_use]
     pub fn is_empty(&self, square: Square) -> bool {
         self.piece_at(square).is_none()
     }
 
+    #[must_use]
     pub fn is_occupied(&self, square: Square) -> bool {
         self.piece_at(square).is_some()
     }
 
+    #[must_use]
     pub fn is_occupied_by(&self, square: Square, color: Color) -> bool {
-        match self.piece_at(square) {
-            Some(piece) => piece.color == color,
-            None => false,
-        }
+        self.piece_at(square)
+            .is_some_and(|piece| piece.color == color)
     }
 
+    #[must_use]
     pub fn find_king(&self, color: Color) -> Option<Square> {
         for index in 0..64 {
             if let Ok(square) = Square::from_index(index) {
@@ -156,6 +166,7 @@ impl Board {
         None
     }
 
+    #[must_use]
     pub fn pieces_of_color(&self, color: Color) -> Vec<(Square, Piece)> {
         let mut pieces = Vec::new();
         for index in 0..64 {
@@ -170,6 +181,7 @@ impl Board {
         pieces
     }
 
+    #[must_use]
     pub fn pieces_of_type(&self, color: Color, piece_type: PieceType) -> Vec<Square> {
         let mut squares = Vec::new();
         for index in 0..64 {
@@ -184,6 +196,7 @@ impl Board {
         squares
     }
 
+    #[must_use]
     pub fn material_count(&self, color: Color) -> i32 {
         let mut total = 0;
         for index in 0..64 {
@@ -198,6 +211,7 @@ impl Board {
         total
     }
 
+    #[must_use]
     pub fn pieces(&self) -> Vec<(Square, Piece)> {
         let mut pieces = Vec::new();
         for index in 0..64 {
@@ -210,6 +224,7 @@ impl Board {
         pieces
     }
 
+    #[must_use]
     pub fn count_total_pieces(&self) -> usize {
         self.pieces().len()
     }
@@ -227,11 +242,10 @@ impl fmt::Display for Board {
             write!(f, "{} ", rank + 1)?;
             for file in 0..8 {
                 if let Ok(square) = Square::new(rank, file) {
-                    let piece_str = match self.piece_at(square) {
-                        Some(piece) => piece.to_string(),
-                        None => ".".to_string(),
-                    };
-                    write!(f, "{} ", piece_str)?;
+                    let piece_str = self
+                        .piece_at(square)
+                        .map_or_else(|| ".".to_string(), |piece| piece.to_string());
+                    write!(f, "{piece_str} ")?;
                 } else {
                     write!(f, "? ")?; // This should never happen with valid rank/file
                 }

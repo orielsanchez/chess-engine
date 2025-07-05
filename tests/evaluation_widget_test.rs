@@ -316,6 +316,10 @@ fn create_mock_search_result(evaluation: i32, depth: u8) -> SearchResult {
         aspiration_researches: 1,
         aspiration_window_size: 50,
         principal_variation: vec![best_move],
+        dtm_result: None,
+        mate_sequence: None,
+        used_dtm_ordering: false,
+        dtm_analysis_status: "not_attempted".to_string(),
     }
 }
 
@@ -346,5 +350,9 @@ fn create_mock_search_result_with_metrics(
         aspiration_researches: 1,
         aspiration_window_size: 50,
         principal_variation: vec![best_move],
+        dtm_result: None,
+        mate_sequence: None,
+        used_dtm_ordering: false,
+        dtm_analysis_status: "not_attempted".to_string(),
     }
 }

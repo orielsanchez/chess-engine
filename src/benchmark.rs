@@ -26,6 +26,7 @@ pub struct ComprehensiveBenchmarkResults {
 }
 
 impl MoveGenBenchmarkResult {
+    #[must_use]
     pub fn efficiency_ratio(&self) -> f64 {
         if self.pseudo_legal_moves_per_second == 0.0 {
             0.0
@@ -34,6 +35,7 @@ impl MoveGenBenchmarkResult {
         }
     }
 
+    #[must_use]
     pub fn format_detailed(&self) -> String {
         format!(
             "Position: {}\n\
@@ -56,6 +58,7 @@ impl MoveGenBenchmarkResult {
 }
 
 impl ComprehensiveBenchmarkResults {
+    #[must_use]
     pub fn format_summary(&self) -> String {
         format!(
             "Move Generation Benchmark Summary:\n\
@@ -74,6 +77,7 @@ impl ComprehensiveBenchmarkResults {
         )
     }
 
+    #[must_use]
     pub fn format_detailed_report(&self) -> String {
         let mut report = String::new();
         report.push_str(&self.format_summary());
@@ -82,7 +86,8 @@ impl ComprehensiveBenchmarkResults {
         report.push('\n');
 
         for (i, result) in self.results.iter().enumerate() {
-            report.push_str(&format!("\n{}. {}\n", i + 1, result.format_detailed()));
+            use std::fmt::Write;
+            write!(report, "\n{}. {}\n", i + 1, result.format_detailed()).unwrap();
             report.push_str(&"-".repeat(60));
             report.push('\n');
         }
@@ -92,6 +97,13 @@ impl ComprehensiveBenchmarkResults {
 }
 
 /// Enhanced benchmark function with better accuracy and configuration
+/// Benchmark move generation for a single position
+///
+/// # Panics
+///
+/// Panics if the position cannot generate moves or if timing calculations fail
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn benchmark_position(
     name: &str,
     position: &Position,
@@ -140,13 +152,17 @@ pub fn benchmark_position(
 
     // Calculate moves per second
     let pseudo_legal_moves_per_second = if pseudo_legal_time.as_secs_f64() > 0.0 {
-        (iterations as f64 * pseudo_legal_count as f64) / pseudo_legal_time.as_secs_f64()
+        let iterations_f64 = f64::from(iterations);
+        let pseudo_legal_count_f64 = pseudo_legal_count as f64;
+        (iterations_f64 * pseudo_legal_count_f64) / pseudo_legal_time.as_secs_f64()
     } else {
         0.0
     };
 
     let legal_moves_per_second = if legal_time.as_secs_f64() > 0.0 {
-        (legal_iterations as f64 * legal_count as f64) / legal_time.as_secs_f64()
+        let legal_iterations_f64 = f64::from(legal_iterations);
+        let legal_count_f64 = legal_count as f64;
+        (legal_iterations_f64 * legal_count_f64) / legal_time.as_secs_f64()
     } else {
         0.0
     };
@@ -158,11 +174,18 @@ pub fn benchmark_position(
         legal_moves_per_second,
         pseudo_legal_move_count: pseudo_legal_count,
         legal_move_count: legal_count,
+        #[allow(clippy::cast_possible_truncation)]
         pseudo_legal_time_ns: pseudo_legal_time.as_nanos() as u64,
+        #[allow(clippy::cast_possible_truncation)]
         legal_time_ns: legal_time.as_nanos() as u64,
     }
 }
 
+/// # Panics
+///
+/// Panics if any of the provided FEN strings are invalid.
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn benchmark_multiple_positions(
     positions: Vec<(&str, &str)>,
     per_position_duration: Duration,
@@ -186,16 +209,18 @@ pub fn benchmark_multiple_positions(
         results.push(result);
     }
 
-    let average_pseudo_legal_moves_per_second = if !results.is_empty() {
-        total_pseudo_legal_moves_per_second / results.len() as f64
-    } else {
+    let average_pseudo_legal_moves_per_second = if results.is_empty() {
         0.0
+    } else {
+        let results_len_f64 = results.len() as f64;
+        total_pseudo_legal_moves_per_second / results_len_f64
     };
 
-    let average_legal_moves_per_second = if !results.is_empty() {
-        total_legal_moves_per_second / results.len() as f64
-    } else {
+    let average_legal_moves_per_second = if results.is_empty() {
         0.0
+    } else {
+        let results_len_f64 = results.len() as f64;
+        total_legal_moves_per_second / results_len_f64
     };
 
     ComprehensiveBenchmarkResults {
@@ -209,6 +234,7 @@ pub fn benchmark_multiple_positions(
 }
 
 /// Standard benchmark suite with representative positions
+#[must_use]
 pub fn get_standard_benchmark_suite() -> Vec<(&'static str, &'static str)> {
     vec![
         (

@@ -12,7 +12,7 @@ use ratatui::{
 use std::collections::VecDeque;
 use std::time::Instant;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TuiState {
     Command,
     Board,
@@ -21,14 +21,14 @@ pub enum TuiState {
     PuzzleSolving,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameMode {
     Analysis,
     PlayVsEngine { difficulty: u8, player_color: Color },
     PuzzleSolving { puzzle_id: String },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayoutMode {
     TwoPanelClassic,
     ThreePanelAnalysis,
@@ -176,7 +176,8 @@ impl Default for CommandHistory {
 }
 
 impl CommandHistory {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             commands: VecDeque::new(),
             current_index: None,
@@ -300,11 +301,12 @@ impl TuiApp {
         self.engine.current_position()
     }
 
-    pub fn state(&self) -> &TuiState {
+    #[must_use]
+    pub const fn state(&self) -> &TuiState {
         &self.state
     }
 
-    pub fn set_state(&mut self, state: TuiState) {
+    pub const fn set_state(&mut self, state: TuiState) {
         self.state = state;
     }
 
@@ -334,17 +336,18 @@ impl TuiApp {
         self.command_buffer = command;
     }
 
-    pub fn cursor_position(&self) -> usize {
+    #[must_use]
+    pub const fn cursor_position(&self) -> usize {
         self.cursor_position
     }
 
-    pub fn move_cursor_left(&mut self) {
+    pub const fn move_cursor_left(&mut self) {
         if self.cursor_position > 0 {
             self.cursor_position -= 1;
         }
     }
 
-    pub fn move_cursor_right(&mut self) {
+    pub const fn move_cursor_right(&mut self) {
         if self.cursor_position < self.command_buffer.len() {
             self.cursor_position += 1;
         }
@@ -819,7 +822,7 @@ impl TuiApp {
             player_color,
         };
         self.game_state.player_turn = Color::White;
-        self.game_state.game_clock = Some((300000, 300000)); // 5 minutes each
+        self.game_state.game_clock = Some((300_000, 300_000)); // 5 minutes each
         self.game_state.move_history.clear();
         self.game_state.last_move = None;
         self.game_state.game_start_time = Some(Instant::now());

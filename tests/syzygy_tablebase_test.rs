@@ -2,6 +2,9 @@ use chess_engine::position::Position;
 use chess_engine::tablebase::{
     DtzResult, MockTablebase, Tablebase, TablebaseError, TablebaseKey, TablebaseResult,
 };
+// Forward declarations for types that don't exist yet
+// These will fail compilation until we implement them (RED phase)
+use chess_engine::tablebase::syzygy::SyzygyTablebase;
 
 /// Comprehensive test suite for real Syzygy tablebase support
 ///
@@ -13,7 +16,6 @@ use chess_engine::tablebase::{
 /// 5. File management and error handling
 ///
 /// INITIAL STATE: All tests will FAIL - this defines our implementation targets
-
 #[cfg(test)]
 mod syzygy_tests {
     use super::*;
@@ -25,7 +27,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create at least one tablebase file so is_initialized() returns true
-        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", tablebase_path));
+        create_uncompressed_syzygy_file(&format!("{tablebase_path}/KQvK.rtbw"));
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
 
@@ -43,9 +45,9 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).ok();
 
         // Create mock tablebase files for testing
-        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", tablebase_path));
-        create_uncompressed_syzygy_file(&format!("{}/KRvK.rtbw", tablebase_path));
-        create_uncompressed_syzygy_file(&format!("{}/KPvK.rtbz", tablebase_path));
+        create_uncompressed_syzygy_file(&format!("{tablebase_path}/KQvK.rtbw"));
+        create_uncompressed_syzygy_file(&format!("{tablebase_path}/KRvK.rtbw"));
+        create_uncompressed_syzygy_file(&format!("{tablebase_path}/KPvK.rtbz"));
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
 
@@ -83,6 +85,7 @@ mod syzygy_tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)] // dtm vs dtz are meaningfully different
     fn test_syzygy_dtm_vs_dtz_distinction() {
         // Test that Syzygy can provide both DTM and DTZ results
         let position = Position::from_fen("8/8/8/8/8/2k5/2Q5/2K5 w - - 0 1").unwrap();
@@ -90,7 +93,7 @@ mod syzygy_tests {
         // Create specific test tablebase for this test
         let test_path = "/tmp/syzygy_dtm_dtz_test";
         std::fs::create_dir_all(test_path).unwrap();
-        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", test_path));
+        create_uncompressed_syzygy_file(&format!("{test_path}/KQvK.rtbw"));
 
         let syzygy = SyzygyTablebase::new(test_path).unwrap();
 
@@ -167,9 +170,7 @@ mod syzygy_tests {
         // With position-specific indexing, these positions may map differently
         // Just verify both give valid tablebase results
         match (&result1, &result2) {
-            (TablebaseResult::Win(_), _)
-            | (TablebaseResult::Loss(_), _)
-            | (TablebaseResult::Draw, _) => {
+            (TablebaseResult::Win(_) | TablebaseResult::Loss(_) | TablebaseResult::Draw, _) => {
                 // Both positions should give valid results
                 match result2 {
                     TablebaseResult::Win(_) | TablebaseResult::Loss(_) | TablebaseResult::Draw => {
@@ -237,7 +238,7 @@ mod syzygy_tests {
 
             let handle = thread::spawn(move || {
                 for _ in 0..100 {
-                    let result = syzygy_clone.probe(&*position_clone);
+                    let result = syzygy_clone.probe(&position_clone);
                     assert!(result.is_ok());
                 }
             });
@@ -276,7 +277,7 @@ mod syzygy_tests {
         let test_path = "/tmp/syzygy_real_test";
         std::fs::create_dir_all(test_path).unwrap();
 
-        create_minimal_kqk_wdl_file(&format!("{}/KQvK.rtbw", test_path));
+        create_minimal_kqk_wdl_file(&format!("{test_path}/KQvK.rtbw"));
 
         let syzygy = SyzygyTablebase::new(test_path).unwrap();
 
@@ -308,9 +309,9 @@ mod syzygy_tests {
     fn create_test_tablebase_files(path: &str) {
         // Create mock .rtbw and .rtbz files with minimal valid structure
         // These will be replaced with real Syzygy file format later
-        create_uncompressed_syzygy_file(&format!("{}/KQvK.rtbw", path));
-        create_uncompressed_syzygy_file(&format!("{}/KRvK.rtbw", path));
-        create_uncompressed_syzygy_file(&format!("{}/KPvK.rtbz", path));
+        create_uncompressed_syzygy_file(&format!("{path}/KQvK.rtbw"));
+        create_uncompressed_syzygy_file(&format!("{path}/KRvK.rtbw"));
+        create_uncompressed_syzygy_file(&format!("{path}/KPvK.rtbz"));
     }
 
     fn create_minimal_kqk_wdl_file(file_path: &str) {
@@ -319,7 +320,7 @@ mod syzygy_tests {
         // --- Header (32 bytes total, all little-endian) ---
 
         // Magic Number (4 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
 
         // Number of blocks (4 bytes). Must be 0 for uncompressed files.
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -346,12 +347,12 @@ mod syzygy_tests {
         // Byte 1: WDL data for the 4 white-to-move positions.
         // Let's make them all 'Win' (value=2, binary=10).
         // The four results are packed: 10 10 10 10
-        data.push(0b10101010); // This is 0xAA
+        data.push(0b1010_1010); // This is 0xAA
 
         // Byte 2: WDL data for the 4 black-to-move positions.
         // Let's make them all 'Draw' (value=1, binary=01).
         // The four results are packed: 01 01 01 01
-        data.push(0b01010101); // This is 0x55
+        data.push(0b0101_0101); // This is 0x55
 
         std::fs::write(file_path, data).unwrap();
     }
@@ -363,7 +364,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create a compressed tablebase file with nblocks > 0
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_compressed_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -387,7 +388,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_block_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_compressed_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -410,7 +411,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_index_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_multi_block_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -426,8 +427,7 @@ mod syzygy_tests {
             let result = syzygy.probe(&position);
             assert!(
                 result.is_ok(),
-                "Block navigation should work for position {}",
-                fen
+                "Block navigation should work for position {fen}"
             );
         }
 
@@ -441,7 +441,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_repair_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_real_repair_compressed_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -468,7 +468,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_dict_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_repair_dictionary_test_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -492,7 +492,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_substitution_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_repair_substitution_test_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -526,7 +526,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_decompress_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_compressed_syzygy_file_with_compression(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -538,10 +538,10 @@ mod syzygy_tests {
         // Verify we get the expected result from the decompressed data
         match result {
             TablebaseResult::Win(dtm) => {
-                assert!(dtm > 0, "DTM should be positive for winning position")
+                assert!(dtm > 0, "DTM should be positive for winning position");
             }
             TablebaseResult::Loss(dtm) => {
-                assert!(dtm > 0, "DTM should be positive for losing position")
+                assert!(dtm > 0, "DTM should be positive for losing position");
             }
             TablebaseResult::Draw => {} // Draw is valid
         }
@@ -557,7 +557,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create compressed version only (the tablebase will find it by material signature)
-        let compressed_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let compressed_path = format!("{tablebase_path}/KQvK.rtbw");
         create_compressed_syzygy_file(&compressed_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -583,7 +583,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_perf_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_compressed_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -613,7 +613,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Magic number (4 bytes, little-endian): 0x5d23e871
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
 
         // Number of blocks (4 bytes, little-endian): 0 (indicates uncompressed)
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -632,7 +632,7 @@ mod syzygy_tests {
 
         // WDL data: packed 2 bits per position, 4 positions per byte (starting at byte 32)
         // First byte: 4 positions, all wins (value=2, binary=10)
-        // Packed as: 10 10 10 10 = 0b10101010 = 0xAA
+        // Packed as: 10 10 10 10 = 0b1010_1010 = 0xAA
         data.push(0xAA); // All 4 positions are wins
         // Second byte: 4 more positions, mixed results
         data.push(0x4E); // Win(10), Draw(01), Loss(00), Win(10) = 0b10011010
@@ -645,7 +645,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Magic number (4 bytes, little-endian): 0x5d23e871
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
 
         // Number of blocks (4 bytes, little-endian): 1 (indicates compressed)
         data.extend_from_slice(&1u32.to_le_bytes());
@@ -691,7 +691,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Magic number
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
 
         // Number of blocks: 2 (multiple blocks but manageable)
         data.extend_from_slice(&2u32.to_le_bytes());
@@ -735,7 +735,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&1u32.to_le_bytes()); // 1 block
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -765,7 +765,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes()); // Magic number
         data.extend_from_slice(&1u32.to_le_bytes()); // 1 block (compressed)
         data.extend_from_slice(&0u32.to_le_bytes()); // Info field
         data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
@@ -810,7 +810,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&1u32.to_le_bytes()); // 1 block
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -844,7 +844,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&1u32.to_le_bytes()); // 1 block
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -891,7 +891,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create a tablebase file with varied WDL data
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_position_indexed_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -935,7 +935,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_side_to_move_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_side_dependent_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -951,9 +951,7 @@ mod syzygy_tests {
         // The results may be the same or different depending on how they hash
         // Just verify both give valid results
         match (&white_result, &black_result) {
-            (TablebaseResult::Win(_), _)
-            | (TablebaseResult::Loss(_), _)
-            | (TablebaseResult::Draw, _) => {
+            (TablebaseResult::Win(_) | TablebaseResult::Loss(_) | TablebaseResult::Draw, _) => {
                 match black_result {
                     TablebaseResult::Win(_) | TablebaseResult::Loss(_) | TablebaseResult::Draw => {
                         // Both are valid - side-to-move affects indexing even if results are same
@@ -972,7 +970,7 @@ mod syzygy_tests {
         let tablebase_path = "/tmp/syzygy_hash_indexing_test";
         std::fs::create_dir_all(tablebase_path).unwrap();
 
-        let file_path = format!("{}/KQvK.rtbw", tablebase_path);
+        let file_path = format!("{tablebase_path}/KQvK.rtbw");
         create_hash_based_syzygy_file(&file_path);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -1012,7 +1010,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes()); // Magic number
         data.extend_from_slice(&1u32.to_le_bytes()); // 1 block (compressed)
         data.extend_from_slice(&0u32.to_le_bytes()); // Info field
         data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
@@ -1046,7 +1044,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&1u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -1076,7 +1074,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&1u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -1120,7 +1118,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create DTZ file with the correct material signature
-        let dtz_file = format!("{}/{}.rtbz", tablebase_path, material_sig);
+        let dtz_file = format!("{tablebase_path}/{material_sig}.rtbz");
         create_dtz_file_kbn_draw(&dtz_file);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -1139,6 +1137,7 @@ mod syzygy_tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)] // dtm vs dtz are meaningfully different
     fn test_dtz_vs_dtm_different_results() {
         // RED: This test will FAIL because current implementation doesn't distinguish DTZ from DTM
         let position = Position::from_fen("8/4k3/8/8/8/B7/2N5/K7 w - - 0 1").unwrap();
@@ -1151,8 +1150,8 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create both DTM (.rtbw) and DTZ (.rtbz) files with different results
-        create_dtm_file_all_wins(&format!("{}/{}.rtbw", tablebase_path, material_sig)); // DTM: Win
-        create_dtz_file_kbn_draw(&format!("{}/{}.rtbz", tablebase_path, material_sig)); // DTZ: Draw
+        create_dtm_file_all_wins(&format!("{tablebase_path}/{material_sig}.rtbw")); // DTM: Win
+        create_dtz_file_kbn_draw(&format!("{tablebase_path}/{material_sig}.rtbz")); // DTZ: Draw
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
 
@@ -1192,7 +1191,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create DTZ file with blessed loss byte (outcome=1, dtz=5)
-        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        let dtz_file = format!("{tablebase_path}/KQvK.rtbz");
         create_dtz_file_blessed_loss(&dtz_file);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -1218,7 +1217,7 @@ mod syzygy_tests {
         std::fs::create_dir_all(tablebase_path).unwrap();
 
         // Create DTZ file with cursed win byte (outcome=3, dtz=0)
-        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        let dtz_file = format!("{tablebase_path}/KQvK.rtbz");
         create_dtz_file_cursed_win(&dtz_file);
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -1249,7 +1248,7 @@ mod syzygy_tests {
 
         // Create DTZ file with specific byte: DTZ=12, outcome=Win (3)
         // Byte = (12 << 2) | 3 = 48 | 3 = 51 = 0x33
-        let dtz_file = format!("{}/KQvK.rtbz", tablebase_path);
+        let dtz_file = format!("{tablebase_path}/KQvK.rtbz");
         create_dtz_file_specific_byte(&dtz_file, 51); // DTZ=12, Win
 
         let syzygy = SyzygyTablebase::new(tablebase_path).unwrap();
@@ -1273,7 +1272,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard Syzygy header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes()); // Magic number
         data.extend_from_slice(&0u32.to_le_bytes()); // nblocks=0 (uncompressed)
         data.extend_from_slice(&0u32.to_le_bytes()); // Info field
         data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
@@ -1282,9 +1281,7 @@ mod syzygy_tests {
 
         // DTZ data: 8 bytes (8 positions, 1 byte each)
         // All positions return Draw (byte value = 2)
-        for _ in 0..8 {
-            data.push(2); // Draw (outcome=2, dtz=0)
-        }
+        data.extend(std::iter::repeat_n(2, 8)); // Draw (outcome=2, dtz=0)
 
         std::fs::write(file_path, data).unwrap();
     }
@@ -1293,7 +1290,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard Syzygy header (32 bytes)
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes()); // Magic number
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes()); // Magic number
         data.extend_from_slice(&0u32.to_le_bytes()); // nblocks=0 (uncompressed)
         data.extend_from_slice(&0u32.to_le_bytes()); // Info field
         data.extend_from_slice(&0u32.to_le_bytes()); // Reserved field
@@ -1313,7 +1310,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -1322,9 +1319,7 @@ mod syzygy_tests {
 
         // DTZ data: Blessed loss with DTZ=5
         // Byte = (5 << 2) | 1 = 20 | 1 = 21
-        for _ in 0..8 {
-            data.push(21); // BlessedLoss with DTZ=5
-        }
+        data.extend(std::iter::repeat_n(21, 8)); // BlessedLoss with DTZ=5
 
         std::fs::write(file_path, data).unwrap();
     }
@@ -1334,7 +1329,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -1343,9 +1338,7 @@ mod syzygy_tests {
 
         // DTZ data: Cursed win (Win with DTZ=0)
         // Byte = (0 << 2) | 3 = 0 | 3 = 3
-        for _ in 0..8 {
-            data.push(3); // Win with DTZ=0 (Cursed Win)
-        }
+        data.extend(std::iter::repeat_n(3, 8)); // Win with DTZ=0 (Cursed Win)
 
         std::fs::write(file_path, data).unwrap();
     }
@@ -1355,7 +1348,7 @@ mod syzygy_tests {
         let mut data = Vec::new();
 
         // Standard header
-        data.extend_from_slice(&0x5d23e871u32.to_le_bytes());
+        data.extend_from_slice(&0x5d23_e871_u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes());
@@ -1370,7 +1363,3 @@ mod syzygy_tests {
         std::fs::write(file_path, data).unwrap();
     }
 }
-
-// Forward declarations for types that don't exist yet
-// These will fail compilation until we implement them (RED phase)
-use chess_engine::tablebase::syzygy::SyzygyTablebase;

@@ -1,3 +1,8 @@
+//! Chess engine library providing core functionality for chess game analysis.
+//!
+//! This library includes modules for board representation, move generation, position
+//! evaluation, search algorithms, and various chess-specific utilities.
+
 pub mod benchmark;
 pub mod board;
 pub mod distance_to_mate;

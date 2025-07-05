@@ -7,7 +7,8 @@ pub enum Color {
 }
 
 impl Color {
-    pub fn opposite(self) -> Self {
+    #[must_use]
+    pub const fn opposite(self) -> Self {
         match self {
             Color::White => Color::Black,
             Color::Black => Color::White,
@@ -35,7 +36,8 @@ pub enum PieceType {
 }
 
 impl PieceType {
-    pub fn material_value(self) -> i32 {
+    #[must_use]
+    pub const fn material_value(self) -> i32 {
         match self {
             PieceType::Pawn => 100,
             PieceType::Knight => 320,
@@ -68,7 +70,8 @@ pub struct Piece {
 }
 
 impl Piece {
-    pub fn new(color: Color, piece_type: PieceType) -> Self {
+    #[must_use]
+    pub const fn new(color: Color, piece_type: PieceType) -> Self {
         Self { color, piece_type }
     }
 
@@ -91,14 +94,14 @@ impl fmt::Display for Piece {
 pub struct Square(pub u8);
 
 impl Square {
-    pub fn new(rank: u8, file: u8) -> Result<Self, &'static str> {
+    pub const fn new(rank: u8, file: u8) -> Result<Self, &'static str> {
         if rank > 7 || file > 7 {
             return Err("Invalid rank or file");
         }
         Ok(Square(rank * 8 + file))
     }
 
-    pub fn from_index(index: u8) -> Result<Self, &'static str> {
+    pub const fn from_index(index: u8) -> Result<Self, &'static str> {
         if index > 63 {
             return Err("Invalid square index");
         }
@@ -127,15 +130,18 @@ impl Square {
         Ok(Square(rank * 8 + file))
     }
 
-    pub fn rank(self) -> u8 {
+    #[must_use]
+    pub const fn rank(self) -> u8 {
         self.0 / 8
     }
 
-    pub fn file(self) -> u8 {
+    #[must_use]
+    pub const fn file(self) -> u8 {
         self.0 % 8
     }
 
-    pub fn index(self) -> u8 {
+    #[must_use]
+    pub const fn index(self) -> u8 {
         self.0
     }
 
@@ -161,7 +167,8 @@ pub struct CastlingRights {
 }
 
 impl CastlingRights {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             white_kingside: true,
             white_queenside: true,
@@ -170,7 +177,8 @@ impl CastlingRights {
         }
     }
 
-    pub fn none() -> Self {
+    #[must_use]
+    pub const fn none() -> Self {
         Self {
             white_kingside: false,
             white_queenside: false,
@@ -179,35 +187,37 @@ impl CastlingRights {
         }
     }
 
-    pub fn can_castle_kingside(&self, color: Color) -> bool {
+    #[must_use]
+    pub const fn can_castle_kingside(&self, color: Color) -> bool {
         match color {
             Color::White => self.white_kingside,
             Color::Black => self.black_kingside,
         }
     }
 
-    pub fn can_castle_queenside(&self, color: Color) -> bool {
+    #[must_use]
+    pub const fn can_castle_queenside(&self, color: Color) -> bool {
         match color {
             Color::White => self.white_queenside,
             Color::Black => self.black_queenside,
         }
     }
 
-    pub fn remove_kingside(&mut self, color: Color) {
+    pub const fn remove_kingside(&mut self, color: Color) {
         match color {
             Color::White => self.white_kingside = false,
             Color::Black => self.black_kingside = false,
         }
     }
 
-    pub fn remove_queenside(&mut self, color: Color) {
+    pub const fn remove_queenside(&mut self, color: Color) {
         match color {
             Color::White => self.white_queenside = false,
             Color::Black => self.black_queenside = false,
         }
     }
 
-    pub fn remove_all(&mut self, color: Color) {
+    pub const fn remove_all(&mut self, color: Color) {
         match color {
             Color::White => {
                 self.white_kingside = false;
