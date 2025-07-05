@@ -41,7 +41,7 @@ impl TablebaseKey {
         let mut black_pieces = Vec::new();
 
         // Count pieces for each side
-        for (square, piece) in position.board.pieces() {
+        for (_square, piece) in position.board.pieces() {
             let piece_char = match piece.piece_type {
                 crate::types::PieceType::King => 'K',
                 crate::types::PieceType::Queen => 'Q',

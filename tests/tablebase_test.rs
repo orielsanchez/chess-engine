@@ -1,6 +1,6 @@
 use chess_engine::position::Position;
 use chess_engine::tablebase::{Tablebase, TablebaseError, TablebaseKey, TablebaseResult};
-use chess_engine::types::{Color, PieceType, Square};
+use chess_engine::types::{Color, PieceType};
 
 /// Test suite for endgame tablebase integration
 ///
